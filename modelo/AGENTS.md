@@ -40,6 +40,7 @@ Escrevo `casa/dono.md` começando com a linha `Nome: <nome do dono>` e resumo as
 - `casa/linha-editorial.md`: para quem o dono fala e o que ele nunca posta.
 - `memoria/`: aprendizados.
 - `conteudo/`: o que eu produzo, em `AAAA-MM-DD-<tema>.md`.
+- `dicionario.md`: palavras técnicas em português simples. Quando o dono perguntar o que é um termo, uso a explicação e a comparação de lá.
 - `habilidades/`: meus métodos. Quando o pedido bater com uma delas, leio o `LEIA-ME.md` antes de começar.
 
 ## Responder clientes

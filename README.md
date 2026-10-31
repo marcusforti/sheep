@@ -30,3 +30,7 @@ Abra um terminal e digite `sheep`, ou clique no atalho na área de trabalho. No 
 
 - `sheep codex`: passa a usar o Codex (assinatura do ChatGPT).
 - `sheep claude`: volta para o Claude.
+
+## Dicionário
+
+Palavra técnica travou você? Busque aqui: https://imersao-operacao-ia.marcusforti2.workers.dev/dicionario/
