@@ -2,7 +2,9 @@
 # Sheep: cria um servidor gratuito na Oracle com a Evolution API (WhatsApp).
 # Rode no Cloud Shell da Oracle, que ja vem logado na conta:
 #   curl -fsSL https://raw.githubusercontent.com/marcusforti/sheep/main/servidor/oracle.sh | bash
-# Usa a maquina Always Free de 1 GB, que aguenta de 1 a 3 numeros. Pode rodar de novo.
+# Tenta a maquina Always Free de 6 GB (Arm) e depois a de 1 GB (AMD), repetindo enquanto a Oracle
+# estiver sem capacidade. Pode rodar de novo: nao cria um segundo servidor.
+# Passo a passo completo: servidor/README.md
 
 C="${OCI_TENANCY:-}"
 # SHEEP_PREFIXO separa um teste de qualquer servidor que ja exista na conta.
@@ -16,7 +18,7 @@ fi
 fala() { printf '\n\033[31m[Sheep]\033[0m %s\n' "$1"; }
 vazio() { [ -z "$1" ] || [ "$1" = "None" ] || [ "$1" = "null" ]; }
 
-JA=$(oci compute instance list -c "$C" --display-name "$P-api" --lifecycle-state RUNNING --query 'data[0].id' --raw-output 2>/dev/null)
+JA=$(oci compute instance list -c "$C" --display-name "$P-api" --query "data[?\"lifecycle-state\"!='TERMINATED' && \"lifecycle-state\"!='TERMINATING'] | [0].id" --raw-output 2>/dev/null)
 if ! vazio "$JA"; then
     IP=$(oci compute instance list-vnics --instance-id "$JA" --query 'data[0]."public-ip"' --raw-output)
     fala "Voce ja tem um servidor: http://$IP:8080/manager"
@@ -44,7 +46,9 @@ if vazio "$SUB"; then
     SUB=$(oci network subnet create -c "$C" --vcn-id "$VCN" --cidr-block 10.0.0.0/24 --display-name "$P-subnet" --dns-label "${ROTULO}sub" --wait-for-state AVAILABLE --query data.id --raw-output)
 fi
 
-CHAVE=$(openssl rand -hex 24)
+# Reaproveita a chave de uma tentativa anterior.
+CHAVE=$(cat ~/evolution-chave.txt 2>/dev/null)
+[ -n "$CHAVE" ] || CHAVE=$(openssl rand -hex 24)
 SENHA=$(openssl rand -hex 16)
 echo "$CHAVE" > ~/evolution-chave.txt
 chmod 600 ~/evolution-chave.txt
@@ -90,7 +94,7 @@ ENV
 cat > docker-compose.yml <<'YML'
 services:
   evolution-api:
-    image: evoapicloud/evolution-api:latest
+    image: evoapicloud/evolution-api:v2.3.7
     container_name: evolution_api
     restart: always
     ports:
@@ -117,31 +121,67 @@ YML
 docker compose up -d
 FIM
 
-fala "Criando o servidor. A Oracle pode demorar alguns minutos..."
-IMG=$(oci compute image list -c "$C" --operating-system "Canonical Ubuntu" --operating-system-version "24.04" --shape VM.Standard.E2.1.Micro --sort-by TIMECREATED --sort-order DESC --query 'data[0].id' --raw-output)
+imagem() {
+    oci compute image list -c "$C" --operating-system "Canonical Ubuntu" --operating-system-version "24.04" --shape "$1"         --sort-by TIMECREATED --sort-order DESC --query "data[?!contains(\"display-name\", 'Minimal')] | [0].id" --raw-output
+}
+ERRO=~/evolution-erro.txt
 ID=""
-for AD in $(oci iam availability-domain list -c "$C" --query 'data[].name' --raw-output | tr -d '[]",'); do
-    ID=$(oci compute instance launch -c "$C" --availability-domain "$AD" --shape VM.Standard.E2.1.Micro --image-id "$IMG" --subnet-id "$SUB" \
-        --assign-public-ip true --display-name "$P-api" --ssh-authorized-keys-file ~/.ssh/sheep_evolution.pub --user-data-file "$INICIO" \
-        --wait-for-state RUNNING --query data.id --raw-output 2>~/evolution-erro.txt)
-    vazio "$ID" || break
+# Devolve 0 se criou, 1 se faltou capacidade e 2 em qualquer outra recusa.
+tenta() {
+    local AD="$1" FORMA="$2" IMG="$3"; shift 3
+    ID=$(oci compute instance launch -c "$C" --availability-domain "$AD" --shape "$FORMA" --image-id "$IMG" --subnet-id "$SUB"         --assign-public-ip true --display-name "$P-api" --ssh-authorized-keys-file ~/.ssh/sheep_evolution.pub --user-data-file "$INICIO"         --wait-for-state RUNNING --query data.id --raw-output "$@" 2>"$ERRO")
+    vazio "$ID" || return 0
+    ID=""
+    grep -qi "capacity" "$ERRO" && return 1
+    return 2
+}
+
+IMG_ARM=$(imagem VM.Standard.A1.Flex)
+IMG_AMD=$(imagem VM.Standard.E2.1.Micro)
+TOTAL="${SHEEP_TENTATIVAS:-40}"
+fala "Criando o servidor. Se a Oracle estiver sem capacidade, tento de novo a cada minuto, ate $TOTAL vezes. Deixe esta aba aberta."
+RECUSA=0
+for N in $(seq 1 "$TOTAL"); do
+    RECUSA=0
+    for AD in $(oci iam availability-domain list -c "$C" --query 'data[].name' --raw-output | tr -d '[]",'); do
+        tenta "$AD" VM.Standard.A1.Flex "$IMG_ARM" --shape-config '{"ocpus":1,"memoryInGBs":6}'; R=$?
+        [ "$R" = 0 ] && break 2
+        [ "$R" = 2 ] && RECUSA=1 && cp "$ERRO" ~/evolution-erro-arm.txt
+        tenta "$AD" VM.Standard.E2.1.Micro "$IMG_AMD"; R=$?
+        [ "$R" = 0 ] && break 2
+        [ "$R" = 2 ] && RECUSA=$((RECUSA + 1))
+    done
+    # As duas maquinas recusadas por outro motivo: repetir nao adianta.
+    [ "$RECUSA" -ge 2 ] && break
+    echo "  Tentativa $N de $TOTAL: sem capacidade."
+    [ "$N" -lt "$TOTAL" ] && sleep 60
 done
 rm -f "$INICIO"
 if vazio "$ID"; then
-    fala "A Oracle recusou agora. Motivo:"
-    grep -o '"message": "[^"]*"' ~/evolution-erro.txt | head -1
-    fala "Mostra isso para a sua agente. Se for falta de capacidade, tente de novo mais tarde."
+    if [ "$RECUSA" -ge 2 ]; then
+        fala "A Oracle recusou. Motivo:"
+        grep -o '"message": "[^"]*"' "$ERRO" | head -1
+        fala "Mostre isso para o seu agente."
+        exit 2
+    fi
+    fala "A Oracle continua sem maquina gratuita livre. Nao ha nada errado com a sua conta."
+    fala "Rode este mesmo comando mais tarde. De madrugada costuma ser mais facil."
     exit 1
 fi
 IP=$(oci compute instance list-vnics --instance-id "$ID" --query 'data[0]."public-ip"' --raw-output)
 
-fala "Servidor criado em $IP. Instalando a Evolution, leva uns 5 minutos..."
-for _ in $(seq 1 60); do
-    curl -fsS --max-time 5 "http://$IP:8080" >/dev/null 2>&1 && break
+fala "Servidor criado em $IP. Instalando a Evolution, leva de 5 a 15 minutos..."
+NO_AR=""
+for _ in $(seq 1 120); do
+    if curl -fsS --max-time 5 "http://$IP:8080" >/dev/null 2>&1; then NO_AR=1; break; fi
     sleep 10
 done
 
-fala "Pronto."
+if [ -n "$NO_AR" ]; then
+    fala "Pronto."
+else
+    fala "O servidor foi criado, mas a Evolution ainda nao respondeu. Espere 10 minutos e abra o painel."
+fi
 echo "  Painel: http://$IP:8080/manager"
 echo "  Chave:  $CHAVE"
 echo

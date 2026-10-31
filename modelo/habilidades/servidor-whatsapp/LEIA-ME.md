@@ -2,6 +2,8 @@
 
 Use quando o dono pedir para ter o WhatsApp no ar 24h, criar a conta na Oracle ou subir a Evolution. Explique o plano em 3 etapas e faça uma de cada vez.
 
+Guia completo, com número novo pela Fluke e erros comuns: https://raw.githubusercontent.com/marcusforti/sheep/main/servidor/README.md
+
 ## 1. Criar a conta (quem faz é o dono)
 
 Site: https://signup.oraclecloud.com
@@ -21,13 +23,13 @@ Com a conta pronta, o dono abre o console da Oracle, clica no ícone `>_` (Cloud
 curl -fsSL https://raw.githubusercontent.com/marcusforti/sheep/main/servidor/oracle.sh | bash
 ```
 
-Esse comando cria a rede e uma máquina gratuita de 1 GB, instala a Evolution e, ao final, mostra o endereço do painel e a chave. Leva uns 10 minutos.
+Esse comando cria a rede e uma máquina gratuita, instala a Evolution e, ao final, mostra o endereço do painel e a chave. Ele tenta primeiro a máquina de 6 GB e depois a de 1 GB, repetindo por até 40 minutos se a Oracle estiver sem capacidade. Pode rodar de novo: não cria outro servidor.
 
 ## 3. Conectar o WhatsApp
 
 1. O dono abre `http://IP:8080/manager` e entra com a chave.
-2. Cria uma instância com um nome curto.
-3. No celular: WhatsApp, Aparelhos conectados, Conectar um aparelho, ler o QR.
+2. Clica em **Instance +**, dá um nome curto, deixa **Baileys** e clica em **Save**.
+3. Clica no nome da instância e em **Get QR Code**. No celular: WhatsApp, Aparelhos conectados, Conectar um aparelho, ler o QR.
 4. No painel da Sheep, em Conexões, o dono cadastra o endereço em "Evolution: endereço" e a chave em "Evolution: chave". Se ele colar a chave no chat, peço para trocar depois.
 
 ## Limites que eu aviso
