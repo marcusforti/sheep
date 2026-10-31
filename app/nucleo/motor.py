@@ -42,6 +42,24 @@ def erro_amigavel(nome, texto):
         return f'Acabou o limite do {NOMES[nome]} por agora. Volta {quando}.'
     return ''
 
+SEGREDOS_DO_AGENTE = ("ZERNIO_API_KEY", "ELEVENLABS_API_KEY", "EVOLUTION_URL", "EVOLUTION_API_KEY", "OUTRA_API_NOME", "OUTRA_API_URL", "OUTRA_API_KEY")
+
+
+def ambiente():
+    """Chaves da tela Conexões para o motor. A API só entra no lugar do login se vier de revenda ou se não houver assinatura."""
+    env = {nome: cofre.ler(nome) for nome in SEGREDOS_DO_AGENTE if cofre.ler(nome)}
+    casa_usuario = os.path.expanduser("~")
+    claude, claude_url = cofre.ler("ANTHROPIC_API_KEY"), cofre.ler("ANTHROPIC_BASE_URL")
+    if claude and (claude_url or not os.path.exists(os.path.join(casa_usuario, ".claude", ".credentials.json"))):
+        env["ANTHROPIC_API_KEY"] = claude
+        if claude_url: env["ANTHROPIC_BASE_URL"] = claude_url
+    openai, openai_url = cofre.ler("OPENAI_API_KEY"), cofre.ler("OPENAI_BASE_URL")
+    if openai and (openai_url or not os.path.exists(os.path.join(casa_usuario, ".codex", "auth.json"))):
+        env["OPENAI_API_KEY"] = env["CODEX_API_KEY"] = openai
+        if openai_url: env["OPENAI_BASE_URL"] = openai_url
+    return env
+
+
 def instalados():
     from nucleo.instalador import completar_path
     completar_path()
@@ -215,6 +233,7 @@ class Leitor:
         return [evento] if evento else []
 
 def iniciar_processo(cmd, cwd, **opcoes):
+    opcoes.setdefault("env", {**os.environ, **ambiente()})
     cmd[0] = shutil.which(cmd[0]) or cmd[0]
     grupo = None
     if os.name == "nt":

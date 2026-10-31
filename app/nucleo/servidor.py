@@ -6,7 +6,7 @@ from nucleo import aprovacoes, caminhos, cofre, habilidades, instalador, motor, 
 from nucleo import whatsapp, identidade
 
 UI = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent.parent)) / "ui"
-CONEXOES = ["TELEGRAM_TOKEN", "TELEGRAM_DONO", "ZERNIO_API_KEY", "ELEVENLABS_API_KEY", "ELEVENLABS_VOZ", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "MOTOR_PADRAO", "APRENDER"]
+CONEXOES = ["TELEGRAM_TOKEN", "TELEGRAM_DONO", "ZERNIO_API_KEY", "ELEVENLABS_API_KEY", "ELEVENLABS_VOZ", "ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL", "OPENAI_API_KEY", "OPENAI_BASE_URL", "EVOLUTION_URL", "EVOLUTION_API_KEY", "OUTRA_API_NOME", "OUTRA_API_URL", "OUTRA_API_KEY", "MOTOR_PADRAO", "APRENDER"]
 LIMITE_ZIP = 30 * 1024**2
 LIMITE_ANEXO = 20 * 1024**2
 TIPOS = {".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".png": "image/png",
@@ -183,6 +183,10 @@ def iniciar(porta=0, ao_mostrar=None, refletir=None):
             if self.path.startswith("/api/"):
                 if not self._ok(): return self._json({"erro": "sem permissão"}, 403)
                 if self.path == "/api/identidade": return self._json(identidade.ler())
+                if self.path == "/api/prompt-mestre":
+                    for arq in (caminhos.casa() / "prompt-mestre.md", Path(__file__).resolve().parents[2] / "modelo" / "prompt-mestre.md"):
+                        if arq.exists(): return self._json({"texto": arq.read_text(encoding="utf-8")})
+                    return self._json({"erro": "Não achei o prompt mestre."}, 404)
                 if self.path == "/api/estado":
                     estado = _estado()
                     estado["sessoes"] = [{**s, **situacao(s["id"], s)} for s in estado["sessoes"]]

@@ -7,8 +7,15 @@ const CON = [
   ["ZERNIO_API_KEY", "Zernio", "Eu agendo seus posts (sempre com o seu sim)."],
   ["ELEVENLABS_API_KEY", "ElevenLabs", "Eu passo a falar com voz."],
   ["ELEVENLABS_VOZ", "Voz da Sheep", "Cole o ID da voz que quer ouvir no WhatsApp."],
-  ["ANTHROPIC_API_KEY", "API Claude (US$ 200)", "Uso a API do presente quando a assinatura acabar no dia."],
-  ["OPENAI_API_KEY", "API OpenAI", "Mais um cérebro de reserva."],
+  ["EVOLUTION_URL", "Evolution: endereço", "O endereço do seu servidor, como http://IP:8080."],
+  ["EVOLUTION_API_KEY", "Evolution: chave", "A chave que apareceu no fim da instalação do servidor."],
+  ["ANTHROPIC_API_KEY", "API do Claude: chave", "Para quem usa API em vez de assinatura. Serve chave da Anthropic ou de revenda."],
+  ["ANTHROPIC_BASE_URL", "API do Claude: de onde vem", "Só se a chave veio de uma revenda. Cole o endereço que ela passou."],
+  ["OPENAI_API_KEY", "API da OpenAI: chave", "Para quem usa API em vez de assinatura. Serve chave da OpenAI ou de revenda."],
+  ["OPENAI_BASE_URL", "API da OpenAI: de onde vem", "Só se a chave veio de uma revenda. Cole o endereço que ela passou."],
+  ["OUTRA_API_NOME", "Outra API: nome", "Qualquer outra, como uma de imagem e vídeo."],
+  ["OUTRA_API_URL", "Outra API: de onde vem", "O endereço que o fornecedor passou."],
+  ["OUTRA_API_KEY", "Outra API: chave", "Eu uso quando você pedir."],
 ];
 let E, sessAtual = null, codigoTelegram = "", avisoTelegram = "";
 let som = false, audioLiberado = false, audioAtual, nAprovAnterior = 0, falaTimer, falaAtual = "", enviando = false;
@@ -373,7 +380,7 @@ function mostraSessoes() {
   const grupo = s => s.origem === "whatsapp" || /^WhatsApp \d{4}-\d{2}-\d{2}$/.test(s.titulo || "") ? "WhatsApp" : s.projeto || "Geral";
   for (const s of lista) { const g = grupo(s); if (!grupos.has(g)) grupos.set(g, []); grupos.get(g).push(s); }
   const ordem = ["Geral", ...[...grupos.keys()].filter(g => !["Geral", "WhatsApp"].includes(g)).sort((a,b) => a.localeCompare(b,"pt-BR")), ...(grupos.has("WhatsApp") ? ["WhatsApp"] : [])];
-  const html = ordem.filter(g => grupos.get(g).length || g === "Geral" && !busca).map(g => `<h3 class="grupo" data-chave="grupo-${esc(g)}">${esc(g)}</h3>${grupos.get(g).map(s => `<button data-chave="sess-${esc(s.id)}" data-id="${esc(s.id)}" class="conv ${s.id === sessAtual ? "on" : ""}"><i class="dot ${s.viva ? "viva" : "dormindo"}" title="${s.viva ? "Acordada" : "Dormindo"}"></i><span>${esc(s.titulo)}</span><time>${esc(horaRelativa(s.atualizada || s.criada))}</time></button>`).join("")}`).join("") || '<p class="grupo">Nenhuma conversa</p>';
+  const html = ordem.filter(g => grupos.get(g).length || g === "Geral" && !busca).map(g => `<h3 class="grupo" data-chave="grupo-${esc(g)}">${esc(g)}</h3>${grupos.get(g).map(s => `<button data-chave="sess-${esc(s.id)}" data-id="${esc(s.id)}" class="conv ${s.id === sessAtual ? "on" : ""}"><i class="dot ${s.viva ? "viva" : "pronto"}" title="${s.viva ? "Acordada" : "Dormindo"}"></i><span>${esc(s.titulo)}</span><time>${esc(horaRelativa(s.atualizada || s.criada))}</time></button>`).join("")}`).join("") || '<p class="grupo">Nenhuma conversa</p>';
   if (secoesUi.get("listaSess") !== html) {
     reconcilia("listaSess", html); secoesUi.set("listaSess", html);
     $("listaSess").querySelectorAll("[data-id]").forEach(b => b.onclick = () => abre(b.dataset.id));
@@ -398,7 +405,7 @@ function mostraCabecalho(s) {
   if (document.activeElement !== $("tituloSessao")) $("tituloSessao").textContent = s.titulo || "Nova conversa";
   if ($("novaConversa").hidden) { $("motor").value = s.motor || $("motor").value; $("motor").disabled = ocupado; }
   const nome = $("motor").value || E?.motor_padrao || "Motor";
-  $("motorNome").textContent = `${nome.charAt(0).toUpperCase() + nome.slice(1)} · ${s.viva ? "aberta" : "dormindo"}`;
+  $("motorNome").textContent = `${nome.charAt(0).toUpperCase() + nome.slice(1)} · ${s.viva ? "aberta" : "pronto"}`;
   $("motorBtn").querySelector(".dot").classList.toggle("viva", !!s.viva);
   $("projAtivo").textContent = s.projeto ? `projeto: ${s.projeto}` : "Geral";
 }
@@ -483,7 +490,7 @@ function recepcao() {
   const fala = E.primeiro_uso ? "Antes de tudo, me deixa te conhecer. Trouxe a resposta do prompt mestre?" : `Oi, ${E.dono_nome || "chefe"}. Agora eu moro aqui. O que a gente faz primeiro?`;
   if ($("recepcao") && falaAtual === fala) return;
   clearTimeout(falaTimer); falaAtual = fala; sessaoExibida = null;
-  $("msgs").innerHTML = `<div class="recepcao" id="recepcao"><img src="sheep.png" alt="Sheep, a agente dos Incomparáveis"><p id="falaSheep" aria-label="${esc(fala)}"></p><div class="pedidos">${E.primeiro_uso ? '<button id="bora">Bora</button>' : PEDIDOS.map((p, i) => `<button class="sec" data-pedido="${i}">${esc(p)}</button>`).join("")}</div></div>`;
+  $("msgs").innerHTML = `<div class="recepcao" id="recepcao"><img src="sheep.png" alt="Sheep, a agente dos Incomparáveis"><p id="falaSheep" aria-label="${esc(fala)}"></p><div class="pedidos">${E.primeiro_uso ? '<button id="copiarMestre">Copiar prompt mestre</button><button id="bora">Bora, já tenho a resposta</button>' : PEDIDOS.map((p, i) => `<button class="sec" data-pedido="${i}">${esc(p)}</button>`).join("")}</div>${E.primeiro_uso ? `<ol class="passosMestre"><li>Copia o prompt mestre aqui em cima.</li><li>Cola na IA que você mais usa (ChatGPT, Claude, Gemini) e envia.</li><li>Copia a resposta dela, volta aqui, clica em Bora e cola pra mim.</li></ol>` : ""}</div>`;
   let i = 0;
   function letra() {
     if (sessAtual || !$("falaSheep")) return;
@@ -492,6 +499,11 @@ function recepcao() {
   }
   if (semMovimento()) $("falaSheep").textContent = fala; else letra();
   if ($("bora")) $("bora").onclick = () => enviar(CONHECER, "conhecendo você");
+  if ($("copiarMestre")) $("copiarMestre").onclick = async ev => {
+    const b = ev.currentTarget;
+    try { await navigator.clipboard.writeText((await api("GET", "/api/prompt-mestre")).texto); b.textContent = "Copiado! Agora cola na sua IA"; }
+    catch (_) { b.textContent = "Não consegui copiar"; }
+  };
   $("msgs").querySelectorAll("[data-pedido]").forEach(b => b.onclick = () => enviar(PEDIDOS[Number(b.dataset.pedido)]));
 }
 function editando(id) {
@@ -538,7 +550,7 @@ async function carrega() {
   atualizaSecao("pacotes", [E.pacotes,E.avisos], mostraPacotes);
   atualizaSecao("conexoes", [E.motores,E.motor_padrao,E.conexoes,E.aprender,codigoTelegram,avisoTelegram,avisoAprender], () => {
     reconcilia("cardsCon", `<h3 class="secao-titulo">Motores</h3><div class="card" data-chave="padrao"><label for="motorPadrao">Motor padrão</label><select id="motorPadrao"><option value="" disabled>Escolha um motor instalado</option>${Object.entries(E.motores).filter(([, v]) => v).map(([k]) => `<option value="${esc(k)}" ${k === E.motor_padrao ? "selected" : ""}>${esc(k)}</option>`).join("")}</select><p id="avisoMotor" aria-live="polite"></p></div>` + Object.entries(E.motores).map(([k, v]) => `<div class="card" data-chave="motor-${esc(k)}"><div class="linha"><h3>${esc(k)}</h3><span class="dot ${v ? "on" : "off"}"></span></div><p>${v ? "Instalado." : "Não instalado neste PC."}</p>${k === "antigravity" ? '<a href="https://antigravity.google" target="_blank" rel="noopener noreferrer">Instalar o Antigravity</a><p>baixe, instale e volte aqui</p>' : ""}</div>`).join("") +
-      '<h3 class="secao-titulo">Chaves e conexões</h3>' + CON.map(([n, t, g]) => `<div class="card" data-chave="con-${n}"><div class="linha"><h3>${t}</h3><span class="dot ${E.conexoes[n] ? "on" : "off"}"></span></div><p>${g}</p><form class="linha" data-c="${n}"><input type="password" placeholder="${E.conexoes[n] ? "ligada · cole outra pra trocar" : "cole aqui"}" autocomplete="off"><button>Salvar</button></form>${n === "TELEGRAM_TOKEN" ? `<p>${E.conexoes.TELEGRAM_DONO ? "Dono vinculado." : "Salve o token e gere um código para me vincular a você."}</p><button class="sec" id="gerarTelegram" ${E.conexoes.TELEGRAM_TOKEN ? "" : "disabled"}>Gerar código</button><p id="codigoTelegram" aria-live="polite">${codigoTelegram ? `Mande /start ${esc(codigoTelegram)} para o seu bot` : esc(avisoTelegram)}</p><button class="sec" id="vincularTelegram" ${codigoTelegram ? "" : "disabled"}>Já mandei /start com o código</button>` : ""}</div>`).join("") + `<div class="card" data-chave="aprender"><h3>Aprender sozinha</h3><label><input type="checkbox" id="aprender" ${E.aprender !== false ? "checked" : ""}> Aprender enquanto a gente trabalha</label><p id="avisoAprender" aria-live="polite">${esc(avisoAprender)}</p></div>`);
+      '<h3 class="secao-titulo">Chaves e conexões</h3>' + CON.map(([n, t, g]) => `<div class="card" data-chave="con-${n}"><div class="linha"><h3>${t}</h3><span class="dot ${E.conexoes[n] ? "on" : "off"}"></span></div><p>${g}</p><form class="linha" data-c="${n}"><input type="${/_URL$|_NOME$/.test(n) ? "text" : "password"}" placeholder="${E.conexoes[n] ? "ligada · cole outra pra trocar" : "cole aqui"}" autocomplete="off"><button>Salvar</button></form>${n === "TELEGRAM_TOKEN" ? `<p>${E.conexoes.TELEGRAM_DONO ? "Dono vinculado." : "Salve o token e gere um código para me vincular a você."}</p><button class="sec" id="gerarTelegram" ${E.conexoes.TELEGRAM_TOKEN ? "" : "disabled"}>Gerar código</button><p id="codigoTelegram" aria-live="polite">${codigoTelegram ? `Mande /start ${esc(codigoTelegram)} para o seu bot` : esc(avisoTelegram)}</p><button class="sec" id="vincularTelegram" ${codigoTelegram ? "" : "disabled"}>Já mandei /start com o código</button>` : ""}</div>`).join("") + `<div class="card" data-chave="aprender"><h3>Aprender sozinha</h3><label><input type="checkbox" id="aprender" ${E.aprender !== false ? "checked" : ""}> Aprender enquanto a gente trabalha</label><p id="avisoAprender" aria-live="polite">${esc(avisoAprender)}</p></div>`);
     $("gerarTelegram").onclick = async () => {
       const r = await api("POST", "/api/telegram/codigo"); codigoTelegram = r.codigo; avisoTelegram = ""; carrega();
     };

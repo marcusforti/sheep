@@ -12,12 +12,12 @@
   --r:14px;--ease:cubic-bezier(.2,.7,.2,1);color-scheme:dark}
 *{box-sizing:border-box;margin:0}
 html,body{height:100%}
-body.app{background:var(--bg);color:var(--fg);font:15px/1.55 var(--body);display:grid;grid-template-columns:276px minmax(0,1fr);overflow:hidden;-webkit-font-smoothing:antialiased}
+body.app{background:var(--bg);color:var(--fg);font:15px/1.55 var(--body);display:grid;grid-template-columns:276px minmax(0,1fr);grid-template-rows:100vh;height:100vh;overflow:hidden;-webkit-font-smoothing:antialiased}
 button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
 :focus-visible{outline:2px solid var(--red2);outline-offset:2px;border-radius:8px}
 
-aside{background:var(--side);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+aside{background:var(--side);border-right:1px solid var(--line);display:flex;flex-direction:column;height:100vh;min-height:0;overflow:hidden}
 .marca{display:flex;align-items:center;gap:12px;padding:18px 18px 14px}
 .marca img{width:38px;height:38px;border-radius:50%;box-shadow:0 0 0 1px var(--red),0 0 18px rgba(224,16,47,.35)}
 .marca b{font:400 26px/1 var(--display);letter-spacing:.02em}
@@ -27,7 +27,7 @@ aside{background:var(--side);border-right:1px solid var(--line);display:flex;fle
 .nova kbd{margin-left:auto;font:11px var(--mono);color:var(--dim)}
 .busca{margin:0 14px 8px;display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:10px;color:var(--dim);font-size:13.5px;transition:background .15s}
 .busca:hover{background:var(--s1)}
-.lista{flex:1;overflow:auto;padding:4px 10px 12px;scrollbar-width:thin;scrollbar-color:var(--s3) transparent}
+.lista{flex:1;min-height:0;overflow:auto;padding:4px 10px 12px;scrollbar-width:thin;scrollbar-color:var(--s3) transparent}
 .grupo{font:10.5px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--dim);padding:14px 10px 7px}
 .conv{width:100%;display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:10px;color:var(--fg2);font-size:14px;text-align:left;position:relative;transition:background .15s,color .15s}
 .conv:hover{background:var(--s1);color:var(--fg)}
@@ -37,7 +37,7 @@ aside{background:var(--side);border-right:1px solid var(--line);display:flex;fle
 .conv time{font:11px var(--mono);color:var(--dim)}
 .dot{width:7px;height:7px;border-radius:50%;background:#4a4043;flex-shrink:0}
 .dot.viva{background:var(--ok);box-shadow:0 0 8px rgba(47,210,122,.6)}
-.rodape{border-top:1px solid var(--line);padding:10px 12px 12px}
+.rodape{flex:none;margin-top:auto;border-top:1px solid var(--line);padding:10px 12px 12px;background:var(--side)}
 .zap{display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:10px;font-size:13px;color:var(--fg2);margin-bottom:6px;background:linear-gradient(90deg,rgba(47,210,122,.08),transparent)}
 .zap i{width:8px;height:8px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 3px rgba(47,210,122,.18);animation:pulso 2.4s infinite}
 @keyframes pulso{50%{box-shadow:0 0 0 6px rgba(47,210,122,0)}}
@@ -178,7 +178,7 @@ button.sec{padding:9px 14px;border-radius:10px;font-size:13.5px;transition:all .
 #filaPedidos{display:flex;flex-direction:column;gap:12px}.na-fila{border-style:dashed;opacity:.8;display:flex;flex-wrap:wrap;gap:8px;align-items:center}.na-fila span{min-width:0;overflow-wrap:anywhere}.na-fila small{font:10px var(--mono);color:var(--warn);margin-left:auto;white-space:nowrap}.na-fila button{padding:2px 6px}
 .base{flex-shrink:0}.caixa textarea{min-width:0;min-height:36px;overflow-y:auto}.anexo,.enviar{flex-shrink:0}.novas-mensagens{position:absolute;bottom:130px;left:50%;transform:translateX(-50%);z-index:4;background:var(--s2)!important;box-shadow:0 8px 24px #0008;white-space:nowrap}
 #avisoConversa{max-width:780px;margin:0 auto 6px;color:var(--warn);font-size:12px;white-space:pre-wrap}#avisoConversa:empty{display:none}.dica{gap:12px;flex-wrap:wrap}#tokensTotal{white-space:nowrap}#avisoHab,#avisoStatus,#avisoPacote{color:var(--warn);font-size:13px;margin-bottom:14px;white-space:pre-wrap}#avisoHab:empty,#avisoStatus:empty,#avisoPacote:empty{display:none}
-.recepcao{margin:auto;text-align:center;max-width:640px;width:100%;padding:12px}.recepcao img{height:min(26vh,220px);max-height:220px;max-width:75%;object-fit:contain;display:block;margin:0 auto 20px;animation:brilhoSheep 2.8s ease-in-out infinite}.recepcao p{font:800 clamp(18px,2vw,25px)/1.4 var(--body);min-height:3em;overflow-wrap:anywhere}.pedidos{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:22px}.pedidos button{border-radius:999px;padding:10px 16px;background:var(--s1)}.pedidos #bora{background:var(--red);min-width:120px}.pedidos button:hover{border-color:var(--red);background:var(--redsoft)}
+.recepcao{margin:auto;text-align:center;max-width:640px;width:100%;padding:12px}.recepcao img{height:min(26vh,220px);max-height:220px;max-width:75%;object-fit:contain;display:block;margin:0 auto 20px;animation:brilhoSheep 2.8s ease-in-out infinite}.recepcao p{font:800 clamp(18px,2vw,25px)/1.4 var(--body);min-height:3em;overflow-wrap:anywhere}.pedidos{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:22px}.pedidos button{border-radius:999px;padding:10px 16px;background:var(--s1)}.pedidos #copiarMestre{background:var(--red);min-width:120px}.passosMestre{margin:18px auto 0;padding-left:20px;max-width:440px;text-align:left;font-size:14px;line-height:1.6;color:var(--fg2)}.pedidos button:hover{border-color:var(--red);background:var(--redsoft)}
 @keyframes brilhoSheep{50%{filter:drop-shadow(0 0 22px #e0102f66)}}
 .linha{display:flex;align-items:center;justify-content:space-between;gap:10px}.linha input{flex:1}.linha button{flex-shrink:0}.acoes-pacote{display:flex;flex-wrap:wrap;gap:8px}.rot{font:11px/1.4 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--dim)}
 .card{min-width:0;overflow-wrap:anywhere;display:flex;flex-direction:column;gap:10px}.card h3,.card p{margin:0}.card ul{padding-left:20px;font-size:14px}.card label{font-size:14px}.card .pacote-meta{font:12px var(--mono)}.dot.on{background:var(--ok)}.dot.off{background:var(--red)}
