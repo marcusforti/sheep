@@ -11,8 +11,8 @@ from nucleo import agentes, aprovacoes, caminhos, cofre, instalador, rotinas, se
 def navegador():
     locais = [os.environ.get(v, "") for v in ("ProgramFiles(x86)", "ProgramFiles", "LOCALAPPDATA")]
     caminhos_possiveis = [Path(base) / resto for base in locais if base for resto in
-                          (r"Microsoft\Edge\Application\msedge.exe", r"Google\Chrome\Application\chrome.exe")]
-    return next((str(p) for p in caminhos_possiveis if p.exists()), None) or shutil.which("msedge") or shutil.which("chrome")
+                          (r"Google\Chrome\Application\chrome.exe", r"Microsoft\Edge\Application\msedge.exe")]
+    return next((str(p) for p in caminhos_possiveis if p.exists()), None) or shutil.which("chrome") or shutil.which("msedge")
 
 
 def abrir(endereco):
@@ -20,8 +20,10 @@ def abrir(endereco):
     programa = navegador()
     if programa:
         perfil = caminhos.sub(".painel-navegador")
+        # O Edge entra sozinho na conta do Windows e cobre a tela com um aviso: estes flags evitam isso.
         return subprocess.Popen([programa, f"--app={endereco}/", f"--user-data-dir={perfil}", "--window-size=1320,860",
-                                 "--no-first-run", "--no-default-browser-check", "--autoplay-policy=no-user-gesture-required"])
+                                 "--no-first-run", "--no-default-browser-check", "--autoplay-policy=no-user-gesture-required",
+                                 "--disable-sync", "--disable-features=msImplicitSignin,msEdgeSyncConsent,EdgeWelcomeSync"])
     webbrowser.open(endereco + "/")
     return None
 

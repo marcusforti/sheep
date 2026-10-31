@@ -2,7 +2,7 @@ import json, os, queue, re, shutil, stat, subprocess, threading, time, traceback
 from datetime import datetime
 from collections import deque
 from weakref import WeakValueDictionary
-from nucleo import aprovacoes, caminhos, cofre, sessoes
+from nucleo import aprovacoes, caminhos, cofre, pastas, sessoes
 
 MOTORES = {"claude": "claude", "codex": "codex", "antigravity": "agy"}
 NOMES = {"claude": "Claude", "codex": "Codex", "antigravity": "Antigravity"}
@@ -31,9 +31,9 @@ def eh_erro(texto):
 
 
 def erro_amigavel(nome, texto):
-    if re.search(r'Invalid API key|/login|authentication', texto, re.I):
+    if re.search(r'Invalid API key|/login|authentication|not logged in|\b401\b|unauthorized', texto, re.I):
         return f'Preciso que você entre de novo no {NOMES[nome]}. Vai em Conexões.'
-    if re.search(r'usage limit|hit your limit|rate_limit|overloaded', texto, re.I):
+    if re.search(r'usage limit|hit your .*limit|limit reached|weekly limit|credit balance|rate_limit|overloaded', texto, re.I):
         quando = 'daqui a pouco'
         epoch = re.search(r'\|\s*(\d+)', texto)
         if epoch:
@@ -48,6 +48,7 @@ SEGREDOS_DO_AGENTE = ("ZERNIO_API_KEY", "ELEVENLABS_API_KEY", "EVOLUTION_URL", "
 def ambiente():
     """Chaves da tela Conexões para o motor. A API só entra no lugar do login se vier de revenda ou se não houver assinatura."""
     env = {nome: cofre.ler(nome) for nome in SEGREDOS_DO_AGENTE if cofre.ler(nome)}
+    env["CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD"] = "1"
     casa_usuario = os.path.expanduser("~")
     claude, claude_url = cofre.ler("ANTHROPIC_API_KEY"), cofre.ler("ANTHROPIC_BASE_URL")
     if claude and (claude_url or not os.path.exists(os.path.join(casa_usuario, ".claude", ".credentials.json"))):
@@ -86,9 +87,11 @@ def isolamento(nome):
         try:
             with arquivo.open("x", encoding="utf-8") as f: json.dump({"mcpServers": {}}, f)
         except FileExistsError: pass
-        return ["--setting-sources", "project,local", "--strict-mcp-config", "--mcp-config", str(arquivo)]
+        return ["--add-dir", str(caminhos.casa()), "--setting-sources", "project,local", "--strict-mcp-config", "--mcp-config", str(arquivo)]
     if nome == "codex":
-        return ["--ignore-user-config", "-c", "mcp_servers={}", "-c", "features.plugins=false", "-c", "features.hooks=false", "-c", "features.apps=false", "-c", "features.memories=false", "-c", "notify=[]"]
+        # Sem a configuração do usuário, o Windows fica sem sandbox e o Codex não consegue gravar nada.
+        sandbox = ["-c", 'windows.sandbox="unelevated"'] if os.name == "nt" else []
+        return sandbox + ["--ignore-user-config", "-c", "mcp_servers={}", "-c", "features.plugins=false", "-c", "features.hooks=false", "-c", "features.apps=false", "-c", "features.memories=false", "-c", "notify=[]"]
     return []
 
 
@@ -213,7 +216,7 @@ class Leitor:
             principal = uso_modelos.get(self.modelo, {}).get('contextWindow')
             self.janela = principal or max((v.get('contextWindow') or 0 for v in uso_modelos.values()), default=0) or self.janela or 200000
             if uso is not None:
-                self.uso = sum(uso.get(k, 0) or 0 for k in ("input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens", "output_tokens"))
+                self.uso = sum(uso.get(k, 0) or 0 for k in ("input_tokens", "cache_creation_input_tokens", "output_tokens"))
             if dado.get("local_command") == "compact" and re.search(r"error|failed|could not|não consegui", dado.get("result", ""), re.I): self.falha_compactacao = True
         if self.nome == "codex":
             if tipo == "turn.completed" and dado.get("usage"):
@@ -525,7 +528,10 @@ def _conversar(sessao_id, pedido, ao_evento=None, rodar=None, cancelar=None):
                 if ao_evento: ao_evento({'tipo':'marcador','valor':'— retomada —'})
             linhas = g.executar(sessao_id, pedido, cancelar=cancelar)
         else:
-            linhas = (rodar or _rodar)(comando(nome, pedido, s.get("motor_id")), cwd, entrada(nome, pedido), **opcoes)
+            cmd = comando(nome, pedido, s.get("motor_id"))
+            externa = pastas.externa(s.get("projeto"))
+            if externa and nome == "codex": cmd[2:2] = ["--add-dir", externa]
+            linhas = (rodar or _rodar)(cmd, cwd, entrada(nome, pedido), **opcoes)
         for linha in linhas:
             for ev in leitor.ler(linha):
                 if ao_evento: ao_evento(ev)

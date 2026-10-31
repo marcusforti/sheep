@@ -6,7 +6,7 @@ const CON = [
   ["TELEGRAM_TOKEN", "Telegram", "Eu fico no seu celular 24h."],
   ["ZERNIO_API_KEY", "Zernio", "Eu agendo seus posts (sempre com o seu sim)."],
   ["ELEVENLABS_API_KEY", "ElevenLabs", "Eu passo a falar com voz."],
-  ["ELEVENLABS_VOZ", "Voz da Sheep", "Cole o ID da voz que quer ouvir no WhatsApp."],
+  ["ELEVENLABS_VOZ", "Trocar a voz", "Já vem com a voz da Sheep. Só preencha se quiser outra, colando o ID da voz."],
   ["EVOLUTION_URL", "Evolution: endereço", "O endereço do seu servidor, como http://IP:8080."],
   ["EVOLUTION_API_KEY", "Evolution: chave", "A chave que apareceu no fim da instalação do servidor."],
   ["ANTHROPIC_API_KEY", "API do Claude: chave", "Para quem usa API em vez de assinatura. Serve chave da Anthropic ou de revenda."],
@@ -17,10 +17,21 @@ const CON = [
   ["OUTRA_API_URL", "Outra API: de onde vem", "O endereço que o fornecedor passou."],
   ["OUTRA_API_KEY", "Outra API: chave", "Eu uso quando você pedir."],
 ];
+const GRUPOS_CON = [
+  ["Claude", "API da Anthropic ou de revenda", ["ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL"]],
+  ["ChatGPT", "API da OpenAI ou de revenda", ["OPENAI_API_KEY", "OPENAI_BASE_URL"]],
+  ["WhatsApp", "O seu servidor Evolution", ["EVOLUTION_URL", "EVOLUTION_API_KEY"]],
+  ["Instagram", "Agendar posts pelo Zernio", ["ZERNIO_API_KEY"]],
+  ["Voz", "Falar com voz pela ElevenLabs", ["ELEVENLABS_API_KEY", "ELEVENLABS_VOZ"]],
+  ["Telegram", "Falar comigo pelo celular", ["TELEGRAM_TOKEN"]],
+  ["Outra API", "Imagem, vídeo ou o que você comprar", ["OUTRA_API_NOME", "OUTRA_API_URL", "OUTRA_API_KEY"]],
+];
+const abertosCon = new Set();
 let E, sessAtual = null, codigoTelegram = "", avisoTelegram = "";
 let som = false, audioLiberado = false, audioAtual, nAprovAnterior = 0, falaTimer, falaAtual = "", enviando = false;
 let consultaEventos, consultaEstado;
 let sessaoExibida = null, anexando = false, tituloSalvando = false;
+let nomeAgente = "Sheep", ultimoAviso = 0;
 const secoesUi = new Map(), rolagens = new Map(), rascunhos = new Map();
 const preferenciasPendentes = new Set();
 const igual = (a, b) => JSON.stringify(a) === JSON.stringify(b);
@@ -76,6 +87,8 @@ function cresce() {
 }
 function fechaMenus() {
   for (const id of ["novaConversa", "motorPop", "memPop", "menuConversa", "confirmacaoArquivar", "moverConversa"]) $(id).hidden = true;
+  fechaCtx();
+  $("apagarSessao").dataset.pronto = ""; $("apagarSessao").textContent = "Apagar conversa";
   for (const id of ["novaSess", "motorBtn", "memBtn", "maisBtn", "barraContexto"]) $(id).setAttribute("aria-expanded", "false");
 }
 function alternaMenu(id, botao) {
@@ -304,7 +317,7 @@ function mostraMensagens(s) {
       const indice = escolhas.push({texto, ativa}) - 1;
       return `<button class="sec" data-opcao="${indice}" data-ativa="${ativa ? "1" : "0"}" ${!ativa || enviando ? "disabled" : ""}>${esc(texto)}</button>`;
     }).join("")}</div>` : ""}</div></div>`;
-  }).join("") + (s.aprovacoes || []).map(a => cardAprovacao(a, true)).join("") + (s.trabalhando ? `<div class="m sheep msg parcial" data-chave="progresso"><img src="rosto.jpg" alt=""><div class="txt"><div class="cursor" id="parcial" ${s.parcial ? "" : "hidden"}>${markdownSeguro(s.parcial || "")}</div><div class="pensando" id="pens" ${s.parcial ? "hidden" : ""}>${trabalhando(s.resumindo ? "Resumindo a conversa…" : "trabalhando…")}</div><div class="acao-atual" id="acaoAtual" role="status">${esc(s.resumindo ? "Resumindo a conversa…" : s.acao || "")}</div></div></div>` : "");
+  }).join("") + (s.aprovacoes || []).map(a => cardAprovacao(a, true)).join("") + (interrompidaAqui(s) ? `<div class="marcador msg interrompida" data-chave="interrompida" role="status"><span>Eu estava respondendo isso quando a janela fechou.</span><div class="acoes-pacote"><button data-continuar>Continuar de onde parou</button><button class="sec" data-deixa>Deixa pra lá</button></div></div>` : "") + (s.trabalhando ? `<div class="m sheep msg parcial" data-chave="progresso"><img src="rosto.jpg" alt=""><div class="txt"><div class="cursor" id="parcial" ${s.parcial ? "" : "hidden"}>${markdownSeguro(s.parcial || "")}</div><div class="pensando" id="pens" ${s.parcial ? "hidden" : ""}>${trabalhando(s.resumindo ? "Resumindo a conversa…" : "trabalhando…")}</div><div class="acao-atual" id="acaoAtual" role="status">${esc(s.resumindo ? "Resumindo a conversa…" : s.acao || "")}</div></div></div>` : "");
   reconcilia("msgs", html); sessaoExibida = sessAtual;
   parcialQuando = Date.now();
   $("msgs").querySelectorAll("[data-opcao]").forEach(b => b.onclick = () => {
@@ -312,6 +325,21 @@ function mostraMensagens(s) {
     if (escolha.ativa && !b.disabled && !enviando) return enviar(escolha.texto);
   });
   ligaMensagem(); ligaAprovacoes($("msgs")); atualizaRolagem(seguir);
+  $("msgs").querySelectorAll("[data-continuar]").forEach(b => b.onclick = () => continuarPedido(s));
+  $("msgs").querySelectorAll("[data-deixa]").forEach(b => b.onclick = () => { esquecePedido(s); mostraMensagens(s); });
+}
+const chaveInterrompida = s => `sheep-deixa:${s.id}:${(s.mensagens || []).length}`;
+function interrompidaAqui(s) {
+  if (!s.interrompida || enviando) return false;
+  try { return localStorage.getItem(chaveInterrompida(s)) !== "1"; } catch (_) { return true; }
+}
+function esquecePedido(s) { try { localStorage.setItem(chaveInterrompida(s), "1"); } catch (_) {} }
+function continuarPedido(s) {
+  esquecePedido(s);
+  $("msgs").querySelector(".interrompida")?.remove();
+  const ultimo = [...(s.mensagens || [])].reverse().find(m => m.quem === "dono");
+  // Se o motor já guardou o pedido, basta mandar seguir. Se não, o pedido vai de novo, uma vez só.
+  enviar(s.motor_id ? "Continue de onde parou: a janela fechou no meio do meu último pedido." : (ultimo?.texto || "Continue de onde parou."));
 }
 function cardAprendi() {
   return `<div class="card aprendi"><h3>Aprendi sozinha</h3>${(E.aprendi || []).map(m => `<div class="lembranca"><span class="rot">${esc(m.data)}</span><p>${esc(m.texto)}</p><div class="linha"><button data-memoria="${esc(m.arquivo)}" data-acao="manter" ${operacoesMemoria.has(m.arquivo) ? "disabled" : ""}>Guardar</button><button class="sec" data-memoria="${esc(m.arquivo)}" data-acao="descartar" ${operacoesMemoria.has(m.arquivo) ? "disabled" : ""}>Esquecer</button></div></div>`).join("") || '<p>Ainda nada novo. Vou aprendendo enquanto a gente trabalha.</p>'}<p id="avisoMemoria" aria-live="polite">${esc(avisoMemoria)}</p></div>`;
@@ -324,6 +352,21 @@ function paraEventos() {
 function trabalhando(frase = "trabalhando…") {
   return `<img src="rosto.jpg" alt=""><span>${esc(frase)}</span><span class="pontinhos" aria-hidden="true"><i></i><i></i><i></i></span>`;
 }
+// Avisa só com a janela em segundo plano: troca o título e, se o navegador deixou, mostra uma notificação.
+function avisar(texto) {
+  if (!document.hidden && document.hasFocus()) return;
+  if (Date.now() - ultimoAviso < 5000) return;
+  ultimoAviso = Date.now();
+  document.title = `(1) ${texto} · ${nomeAgente}`;
+  try { if (typeof Notification !== "undefined" && Notification.permission === "granted") new Notification(nomeAgente, {body: texto, icon: "rosto.jpg", tag: "sheep"}); } catch (_) {}
+}
+function voltouFoco() { if (!document.hidden && document.hasFocus()) document.title = nomeAgente; }
+window.addEventListener("focus", voltouFoco);
+document.addEventListener("visibilitychange", voltouFoco);
+function pedePermissaoAviso() {
+  try { if (typeof Notification !== "undefined" && Notification.permission === "default") Notification.requestPermission(); } catch (_) {}
+}
+const tituloCurto = sid => { const t = (sessoesUi.get(sid)?.titulo || E?.sessoes?.find(x => x.id === sid)?.titulo || "").trim(); return t.length > 40 ? t.slice(0, 40) + "…" : t; };
 async function iniciaEventos(sid) {
   paraEventos();
   const consulta = consultaEventos = {desde: 0};
@@ -339,7 +382,7 @@ async function iniciaEventos(sid) {
         const completa = await api("GET", `/api/sessao/${encodeURIComponent(sid)}`);
         if (consultaEventos !== consulta || sessAtual !== sid) return;
         recebeSessao(sid, completa);
-        if (antes.trabalhando && !completa.trabalhando) tocar("pronto");
+        if (antes.trabalhando && !completa.trabalhando) { tocar("pronto"); avisar(`Terminei${tituloCurto(sid) ? `: ${tituloCurto(sid)}` : ""}`); }
       } else recebeSessao(sid, r);
       if ($("avisoConversa").textContent === "Não consegui atualizar a conversa. Já tento de novo.") $("avisoConversa").textContent = "";
     } catch (_) { if (consultaEventos === consulta) $("avisoConversa").textContent = "Não consegui atualizar a conversa. Já tento de novo."; }
@@ -373,21 +416,260 @@ function horaRelativa(valor) {
   if (minutos < 2880) return "ontem";
   return new Date(data).toLocaleDateString("pt-BR", {day:"2-digit", month:"2-digit"});
 }
+let edicao = null;
+const SETA = '<svg class="seta" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>';
+const ICO_PASTA = '<svg viewBox="0 0 24 24"><path d="M3 7V5h6l2 2h10v12H3z"/></svg>';
+const ICO_PROJ = '<svg viewBox="0 0 24 24"><path d="M4 4h16v16H4zM4 9h16"/></svg>';
+const ICO_MAIS = '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>';
+const ICO_MENU = '<svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/></svg>';
+const nomeProjeto = (chave, org) => chave === "" ? "Geral" : chave === "@whatsapp" ? "WhatsApp" : (org.nomes || {})[chave] || chave;
+const chaveProjetoDe = (s, existentes) => s.origem === "whatsapp" || /^WhatsApp \d{4}-\d{2}-\d{2}$/.test(s.titulo || "") ? "@whatsapp" : existentes.has(s.projeto || "") ? (s.projeto || "") : "";
+function listaProjetos() {
+  const org = E?.organizacao || {pastas: []};
+  return org.pastas.flatMap(p => p.projetos.filter(c => c !== "@whatsapp").map(c => ({chave: c, nome: nomeProjeto(c, org), pasta: p.nome})));
+}
 function mostraSessoes() {
   if (!E) return;
-  const grupos = new Map([["Geral", []]]), busca = $("buscaConversas").value.trim().toLocaleLowerCase("pt-BR");
-  const lista = (E.sessoes || []).filter(s => !!s.arquivada === verArquivadas && String(s.titulo || "").toLocaleLowerCase("pt-BR").includes(busca));
-  const grupo = s => s.origem === "whatsapp" || /^WhatsApp \d{4}-\d{2}-\d{2}$/.test(s.titulo || "") ? "WhatsApp" : s.projeto || "Geral";
-  for (const s of lista) { const g = grupo(s); if (!grupos.has(g)) grupos.set(g, []); grupos.get(g).push(s); }
-  const ordem = ["Geral", ...[...grupos.keys()].filter(g => !["Geral", "WhatsApp"].includes(g)).sort((a,b) => a.localeCompare(b,"pt-BR")), ...(grupos.has("WhatsApp") ? ["WhatsApp"] : [])];
-  const html = ordem.filter(g => grupos.get(g).length || g === "Geral" && !busca).map(g => `<h3 class="grupo" data-chave="grupo-${esc(g)}">${esc(g)}</h3>${grupos.get(g).map(s => `<button data-chave="sess-${esc(s.id)}" data-id="${esc(s.id)}" class="conv ${s.id === sessAtual ? "on" : ""}"><i class="dot ${s.viva ? "viva" : "pronto"}" title="${s.viva ? "Acordada" : "Dormindo"}"></i><span>${esc(s.titulo)}</span><time>${esc(horaRelativa(s.atualizada || s.criada))}</time></button>`).join("")}`).join("") || '<p class="grupo">Nenhuma conversa</p>';
+  const org = E.organizacao || {pastas: [], recolhidos: [], nomes: {}}, busca = $("buscaConversas").value.trim().toLocaleLowerCase("pt-BR");
+  const recolhidos = new Set(org.recolhidos || []), existentes = new Set(org.pastas.flatMap(p => p.projetos));
+  const porProjeto = new Map();
+  for (const s of E.sessoes || []) {
+    if (!!s.arquivada !== verArquivadas) continue;
+    const chave = chaveProjetoDe(s, existentes);
+    if (!porProjeto.has(chave)) porProjeto.set(chave, []);
+    porProjeto.get(chave).push(s);
+  }
+  const casa = t => String(t || "").toLocaleLowerCase("pt-BR").includes(busca);
+  const rotulo = chave => String(nomeProjeto(chave, org));
+  const linhas = [];
+  const campo = (tipo, valor, extra = {}) => `<form class="no edita" data-chave="edita-${tipo}-${esc(extra.id ?? "")}" data-edita="${tipo}" data-id="${esc(extra.id ?? "")}" data-pasta="${esc(extra.pasta ?? "")}" style="margin-left:${extra.recuo || 0}px"><input value="${esc(valor)}" maxlength="${tipo.endsWith("sessao") ? 120 : 60}" aria-label="Nome" autocomplete="off"></form>`;
+  if (edicao?.tipo === "nova-pasta") linhas.push(campo("nova-pasta", ""));
+  for (const pasta of org.pastas) {
+    const projs = [];
+    let totalPasta = 0;
+    for (const chave of pasta.projetos) {
+      const todas = porProjeto.get(chave) || [], visiveis = busca ? todas.filter(s => casa(s.titulo) || casa(rotulo(chave)) || casa(pasta.nome)) : todas;
+      if (chave === "@whatsapp" && !todas.length) continue;
+      if ((busca || verArquivadas) && !visiveis.length) continue;
+      projs.push({chave, visiveis}); totalPasta += visiveis.length;
+    }
+    if ((busca || verArquivadas) && !projs.length) continue;
+    const pRec = !busca && recolhidos.has(`pasta:${pasta.id}`) && edicao?.pasta !== pasta.id;
+    const editaPasta = edicao?.tipo === "renomear-pasta" && edicao.id === pasta.id;
+    linhas.push(editaPasta ? campo("renomear-pasta", pasta.nome, {id: pasta.id}) :
+      `<div class="no pasta" data-chave="pasta-${esc(pasta.id)}" data-pasta="${esc(pasta.id)}"><button class="no-corpo" data-acao="alterna" data-alvo="pasta:${esc(pasta.id)}" aria-expanded="${!pRec}" title="${pRec ? "Expandir" : "Recolher"}">${SETA}${ICO_PASTA}<b>${esc(pasta.nome)}</b><em>${totalPasta}</em></button><span class="no-acoes"><button data-acao="novo-proj" data-pasta="${esc(pasta.id)}" aria-label="Novo projeto em ${esc(pasta.nome)}" title="Novo projeto">${ICO_MAIS}</button><button data-acao="menu-pasta" data-pasta="${esc(pasta.id)}" aria-label="Ações da pasta ${esc(pasta.nome)}" aria-haspopup="menu" title="Ações">${ICO_MENU}</button></span></div>`);
+    if (pRec) continue;
+    if (edicao?.tipo === "novo-proj" && edicao.pasta === pasta.id) linhas.push(campo("novo-proj", "", {pasta: pasta.id, recuo: 14}));
+    for (const {chave, visiveis} of projs) {
+      const jRec = !busca && recolhidos.has(`proj:${chave}`);
+      const editaProj = edicao?.tipo === "renomear-proj" && edicao.id === chave;
+      const virtual = chave === "" || chave === "@whatsapp";
+      linhas.push(editaProj ? campo("renomear-proj", nomeProjeto(chave, org), {id: chave, recuo: 14}) :
+        `<div class="no proj" data-chave="proj-${esc(chave)}" data-proj="${esc(chave)}" ${chave === "@whatsapp" ? "" : 'draggable="true"'}><button class="no-corpo" data-acao="alterna" data-alvo="proj:${esc(chave)}" aria-expanded="${!jRec}" title="${jRec ? "Expandir" : "Recolher"}">${SETA}${ICO_PROJ}<b>${esc(rotulo(chave))}</b><em>${visiveis.length}</em></button><span class="no-acoes">${chave === "@whatsapp" ? "" : `<button data-acao="nova-conv" data-proj="${esc(chave)}" aria-label="Nova conversa em ${esc(rotulo(chave))}" title="Nova conversa">${ICO_MAIS}</button><button data-acao="menu-proj" data-proj="${esc(chave)}" data-virtual="${virtual ? 1 : 0}" aria-label="Ações do projeto ${esc(rotulo(chave))}" aria-haspopup="menu" title="Ações">${ICO_MENU}</button>`}</span></div>`);
+      if (jRec) continue;
+      if (!visiveis.length && !busca && !verArquivadas) linhas.push(`<p class="vazio" data-chave="vazio-${esc(chave)}">sem conversas</p>`);
+      for (const s of visiveis) {
+        const editaSess = edicao?.tipo === "renomear-sessao" && edicao.id === s.id;
+        linhas.push(editaSess ? campo("renomear-sessao", s.titulo || "", {id: s.id, recuo: 28}) :
+          `<div class="no s" data-chave="sess-${esc(s.id)}" data-sess="${esc(s.id)}" draggable="true"><button data-id="${esc(s.id)}" data-acao="abre" class="conv ${s.id === sessAtual ? "on" : ""}"><i class="dot ${s.viva ? "viva" : "pronto"}" title="${s.viva ? "Acordada" : "Dormindo"}"></i><span>${esc(s.titulo)}</span><time>${esc(horaRelativa(s.atualizada || s.criada))}</time></button><button class="no-mais" data-acao="menu-sess" data-id="${esc(s.id)}" aria-label="Ações da conversa ${esc(s.titulo)}" aria-haspopup="menu" title="Ações">${ICO_MENU}</button></div>`);
+      }
+    }
+  }
+  const html = linhas.join("") || '<p class="grupo">Nenhuma conversa</p>';
   if (secoesUi.get("listaSess") !== html) {
     reconcilia("listaSess", html); secoesUi.set("listaSess", html);
-    $("listaSess").querySelectorAll("[data-id]").forEach(b => b.onclick = () => abre(b.dataset.id));
+    const campoAberto = $("listaSess").querySelector(".edita input");
+    if (campoAberto && document.activeElement !== campoAberto) { campoAberto.focus(); campoAberto.select(); }
   }
   $("verArquivadas").textContent = verArquivadas ? "Ver conversas ativas" : "Ver arquivadas";
   $("verArquivadas").setAttribute("aria-pressed", String(verArquivadas));
 }
+function avisoLateral(texto) { $("avisoLateral").textContent = texto || ""; }
+async function acaoLateral(rota, corpo, atualiza = true) {
+  avisoLateral("");
+  try {
+    const r = confirmaResposta(await api("POST", rota, corpo));
+    if (r.organizacao && E) { E.organizacao = r.organizacao; secoesUi.delete("listaSess"); }
+    if (atualiza) { if (consultaEstado) await consultaEstado.catch(() => {}); await carrega(); }
+    if (sessAtual && corpo?.sessao === sessAtual) recebeSessao(sessAtual, await api("GET", `/api/sessao/${encodeURIComponent(sessAtual)}`));
+    return true;
+  } catch (e) { avisoLateral(e.message || "Não consegui concluir. Tenta de novo."); return false; }
+  finally { mostraSessoes(); }
+}
+function pedeEdicao(dados) { edicao = dados; secoesUi.delete("listaSess"); mostraSessoes(); }
+function cancelaEdicao() { if (!edicao) return; edicao = null; secoesUi.delete("listaSess"); mostraSessoes(); }
+async function confirmaEdicao(form) {
+  const tipo = form.dataset.edita, id = form.dataset.id, pasta = form.dataset.pasta, nome = form.querySelector("input").value.trim();
+  edicao = null; secoesUi.delete("listaSess");
+  if (!nome) return mostraSessoes();
+  if (tipo === "nova-pasta") await acaoLateral("/api/organizacao/pasta", {nome});
+  else if (tipo === "renomear-pasta") await acaoLateral("/api/organizacao/pasta/renomear", {id, nome});
+  else if (tipo === "novo-proj") await acaoLateral("/api/organizacao/projeto", {nome, pasta});
+  else if (tipo === "renomear-proj") await acaoLateral("/api/organizacao/projeto/renomear", {projeto: id, nome});
+  else if (tipo === "renomear-sessao") await acaoLateral("/api/sessao/renomear", {sessao: id, titulo: nome});
+}
+function alternaRecolher(chave) {
+  const org = E.organizacao, estava = org.recolhidos.includes(chave);
+  org.recolhidos = estava ? org.recolhidos.filter(c => c !== chave) : [...org.recolhidos, chave];
+  mostraSessoes();
+  acaoLateral("/api/organizacao/recolher", {chave, recolhido: !estava}, false);
+}
+async function novaConversaEm(projeto) {
+  try {
+    const s = await api("POST", "/api/sessao", {titulo: "Nova conversa", projeto: projeto || null, motor: E?.motor_padrao || $("motor").value});
+    await carrega(); await abre(s.id); $("texto").focus();
+  } catch (e) { avisoLateral(e.message); }
+}
+function fechaCtx() { $("ctx").hidden = true; $("ctx").innerHTML = ""; }
+function abreCtx(botao, itens) {
+  fechaMenus();
+  $("ctx").innerHTML = itens.map((it, i) => it === "-" ? "<hr>" : it.titulo ? `<h5>${esc(it.titulo)}</h5>` : `<button data-i="${i}" ${it.desligado ? "disabled" : ""} class="${it.perigo ? "perigo" : ""}" role="menuitem">${esc(it.texto)}</button>`).join("");
+  $("ctx").querySelectorAll("button[data-i]").forEach(b => b.onclick = ev => {
+    ev.stopPropagation();
+    const it = itens[Number(b.dataset.i)];
+    if (it.confirma && b.dataset.pronto !== "1") { b.dataset.pronto = "1"; b.textContent = it.confirma; return; }
+    fechaCtx(); it.faz();
+  });
+  const r = botao.getBoundingClientRect();
+  $("ctx").hidden = false;
+  const alto = $("ctx").offsetHeight, largura = $("ctx").offsetWidth;
+  $("ctx").style.left = Math.max(8, Math.min(r.right - largura + 6, innerWidth - largura - 8)) + "px";
+  $("ctx").style.top = Math.max(8, Math.min(r.bottom + 4, innerHeight - alto - 8)) + "px";
+  $("ctx").querySelector("button:not([disabled])")?.focus();
+}
+async function projetoDePasta(grupo) {
+  avisoLateral("A janela de pastas abriu. Se não apareceu, olha atrás desta janela.");
+  try {
+    const s = confirmaResposta(await api("POST", "/api/projeto/pasta", {motor: $("motor").value, grupo}));
+    avisoLateral("");
+    if (s.cancelado) return false;
+    if (consultaEstado) await consultaEstado.catch(() => {});
+    await carrega();
+    tela("conversa"); await abre(s.id);
+    await enviar("Acabei de escolher esta pasta. Olha o que tem nela e me diz, em até 5 linhas, o que você entendeu do projeto.");
+    return true;
+  } catch (erro) { avisoLateral(erro.message || "Não consegui abrir essa pasta."); return false; }
+}
+function menuPasta(botao) {
+  const org = E.organizacao, pasta = org.pastas.find(p => p.id === botao.dataset.pasta);
+  if (!pasta) return;
+  abreCtx(botao, [
+    {texto: "Novo projeto: escolher pasta", faz: () => projetoDePasta(pasta.id)},
+    {texto: "Novo projeto vazio", faz: () => pedeEdicao({tipo: "novo-proj", pasta: pasta.id})},
+    {texto: "Renomear pasta", faz: () => pedeEdicao({tipo: "renomear-pasta", id: pasta.id, pasta: pasta.id})},
+    ...(pasta.id === "padrao" ? [] : ["-", {texto: "Excluir pasta", confirma: "Confirmar: os projetos voltam pra pasta padrão", perigo: true, faz: () => acaoLateral("/api/organizacao/pasta/excluir", {id: pasta.id})}])
+  ]);
+}
+function textoApagarProjeto(r) {
+  const n = r.conversas || 0, a = r.arquivos || 0;
+  const conversas = n === 0 ? "Confirmar: apagar o projeto (sem conversas)." : n === 1 ? "Confirmar: apagar o projeto e a 1 conversa dele." : `Confirmar: apagar o projeto e as ${n} conversas dele.`;
+  if (r.externa) return `${conversas} Os arquivos da sua pasta continuam lá.`;
+  return `${conversas}${a ? (a === 1 ? " O 1 arquivo que eu guardei nele também some." : ` Os ${a} arquivos que eu guardei nele também somem.`) : ""} Isso não volta.`;
+}
+async function menuProjeto(botao) {
+  const chave = botao.dataset.proj, virtual = botao.dataset.virtual === "1";
+  let apagar = null;
+  if (!virtual) {
+    avisoLateral("");
+    try { apagar = confirmaResposta(await api("POST", "/api/projeto/resumo", {projeto: chave})); }
+    catch (e) { avisoLateral(e.message || "Não consegui ver esse projeto. Tenta de novo."); }
+  }
+  const org = E.organizacao, atual = org.pastas.find(p => p.projetos.includes(chave));
+  abreCtx(botao, [
+    {texto: "Nova conversa aqui", faz: () => novaConversaEm(chave)},
+    ...(virtual ? [] : [{texto: "Renomear projeto", faz: () => pedeEdicao({tipo: "renomear-proj", id: chave})}]),
+    ...(apagar ? [{texto: "Apagar projeto", confirma: textoApagarProjeto(apagar), perigo: true, faz: () => apagarProjeto(chave)}] : []),
+    "-", {titulo: "Mover para a pasta"},
+    ...org.pastas.map(p => ({texto: p.nome, desligado: p.id === atual?.id, faz: () => acaoLateral("/api/organizacao/projeto/mover", {projeto: chave, pasta: p.id})}))
+  ]);
+}
+function voltaParaInicio() {
+  paraEventos(); clearTimeout(falaTimer);
+  sessAtual = null; sessaoExibida = null;
+  $("avisoConversa").textContent = ""; $("filaPedidos").hidden = true; $("novasMensagens").hidden = true;
+  $("texto").value = ""; cresce();
+  secoesUi.delete("fila"); secoesUi.delete("contexto");
+  mostraContexto({}); mostraCabecalho({}); recepcao();
+}
+function esqueceConversas(ids) {
+  for (const id of ids) { sessoesUi.delete(id); rascunhos.delete(id); rolagens.delete(id); trabalhandoAntes.delete(id); }
+  if (E) E.sessoes = E.sessoes.filter(s => !ids.includes(s.id));
+  if (ids.includes(sessAtual)) voltaParaInicio();
+  secoesUi.delete("listaSess");
+}
+async function apagaEAtualiza(rota, corpo, ids, aviso) {
+  const aberta = ids.includes(sessAtual);
+  avisoLateral("");
+  try {
+    const r = confirmaResposta(await api("POST", rota, corpo));
+    if (r.organizacao && E) E.organizacao = r.organizacao;
+  } catch (e) {
+    const texto = e.message || "Não consegui apagar. Tenta de novo.";
+    avisoLateral(texto); if (aberta) $("avisoConversa").textContent = texto;
+    return false;
+  }
+  esqueceConversas(ids); mostraSessoes();
+  try { if (consultaEstado) await consultaEstado.catch(() => {}); await carrega(); } catch (_) {}
+  avisoLateral(aviso); mostraSessoes();
+  return true;
+}
+const apagarConversa = sid => apagaEAtualiza("/api/sessao/apagar", {sessao: sid}, [sid], "Conversa apagada.");
+const apagarProjeto = chave => apagaEAtualiza("/api/projeto/apagar", {projeto: chave}, (E?.sessoes || []).filter(s => s.projeto === chave).map(s => s.id), "Projeto apagado.");
+function menuSessao(botao) {
+  const s = (E.sessoes || []).find(x => x.id === botao.dataset.id);
+  if (!s) return;
+  const atual = chaveProjetoDe(s, new Set(E.organizacao.pastas.flatMap(p => p.projetos)));
+  abreCtx(botao, [
+    {texto: "Renomear conversa", faz: () => pedeEdicao({tipo: "renomear-sessao", id: s.id})},
+    {texto: s.arquivada ? "Reabrir" : "Arquivar", faz: () => acaoLateral("/api/sessao/arquivar", {sessao: s.id, arquivada: !s.arquivada})},
+    {texto: "Apagar conversa", confirma: "Confirmar: apagar de vez. Isso não volta.", perigo: true, faz: () => apagarConversa(s.id)},
+    "-", {titulo: "Mover para o projeto"},
+    ...listaProjetos().map(p => ({texto: `${p.nome}  ·  ${p.pasta}`, desligado: p.chave === atual, faz: () => acaoLateral("/api/sessao/mover", {sessao: s.id, projeto: p.chave || null})}))
+  ]);
+}
+$("listaSess").addEventListener("click", ev => {
+  const b = ev.target.closest("[data-acao]");
+  if (!b || !$("listaSess").contains(b)) return;
+  ev.stopPropagation();
+  const acao = b.dataset.acao;
+  if (acao === "abre") abre(b.dataset.id);
+  else if (acao === "alterna") alternaRecolher(b.dataset.alvo);
+  else if (acao === "novo-proj") pedeEdicao({tipo: "novo-proj", pasta: b.dataset.pasta});
+  else if (acao === "nova-conv") novaConversaEm(b.dataset.proj);
+  else if (acao === "menu-pasta") menuPasta(b);
+  else if (acao === "menu-proj") menuProjeto(b);
+  else if (acao === "menu-sess") menuSessao(b);
+});
+$("listaSess").addEventListener("submit", ev => { ev.preventDefault(); confirmaEdicao(ev.target); });
+$("listaSess").addEventListener("keydown", ev => { if (ev.key === "Escape" && ev.target.closest(".edita")) { ev.preventDefault(); ev.stopPropagation(); cancelaEdicao(); } });
+$("listaSess").addEventListener("focusout", ev => { if (ev.target.closest?.(".edita") && edicao && !ev.relatedTarget?.closest?.(".edita")) setTimeout(() => { if (edicao && !document.activeElement?.closest?.(".edita")) cancelaEdicao(); }, 120); });
+$("novaPasta").onclick = () => pedeEdicao({tipo: "nova-pasta"});
+$("novoProjeto").onclick = () => projetoDePasta();
+let arrastando = null;
+$("listaSess").addEventListener("dragstart", ev => {
+  const no = ev.target.closest?.("[data-sess],[data-proj]");
+  if (!no) return;
+  arrastando = no.dataset.sess ? {tipo: "sessao", id: no.dataset.sess} : {tipo: "projeto", id: no.dataset.proj};
+  ev.dataTransfer.effectAllowed = "move"; ev.dataTransfer.setData("text/plain", arrastando.id);
+});
+const alvoDrop = ev => {
+  if (!arrastando) return null;
+  const no = ev.target.closest?.(arrastando.tipo === "sessao" ? "[data-proj]" : "[data-pasta]");
+  return no && $("listaSess").contains(no) && !(arrastando.tipo === "sessao" && no.dataset.proj === "@whatsapp") ? no : null;
+};
+$("listaSess").addEventListener("dragover", ev => {
+  const no = alvoDrop(ev);
+  $("listaSess").querySelectorAll(".alvo").forEach(x => { if (x !== no) x.classList.remove("alvo"); });
+  if (no) { ev.preventDefault(); no.classList.add("alvo"); }
+});
+$("listaSess").addEventListener("drop", ev => {
+  const no = alvoDrop(ev), item = arrastando;
+  if (!no) return;
+  ev.preventDefault(); arrastando = null; no.classList.remove("alvo");
+  if (item.tipo === "sessao") acaoLateral("/api/sessao/mover", {sessao: item.id, projeto: no.dataset.proj || null});
+  else acaoLateral("/api/organizacao/projeto/mover", {projeto: item.id, pasta: no.dataset.pasta});
+});
+$("listaSess").addEventListener("dragend", () => { arrastando = null; $("listaSess").querySelectorAll(".alvo").forEach(x => x.classList.remove("alvo")); });
 function mostraCabecalho(s) {
   const fila = s.fila || [], ocupado = !!s.trabalhando || !!fila.length;
   $("enviar").disabled = !!s.arquivada || anexando;
@@ -399,14 +681,20 @@ function mostraCabecalho(s) {
   $("fecharSessao").disabled = ocupado || !sessAtual;
   $("arquivarSessao").disabled = ocupado || !sessAtual;
   $("moverSessao").disabled = ocupado || !sessAtual;
+  $("apagarSessao").disabled = !sessAtual;
   $("arquivarSessao").textContent = s.arquivada ? "Reabrir" : "Arquivar";
   $("maisBtn").disabled = !sessAtual;
   $("tituloSessao").setAttribute("contenteditable", String(!!sessAtual && !tituloSalvando));
   if (document.activeElement !== $("tituloSessao")) $("tituloSessao").textContent = s.titulo || "Nova conversa";
   if ($("novaConversa").hidden) { $("motor").value = s.motor || $("motor").value; $("motor").disabled = ocupado; }
   const nome = $("motor").value || E?.motor_padrao || "Motor";
-  $("motorNome").textContent = `${nome.charAt(0).toUpperCase() + nome.slice(1)} · ${s.viva ? "aberta" : "pronto"}`;
-  $("motorBtn").querySelector(".dot").classList.toggle("viva", !!s.viva);
+  const ultima = (s.mensagens || []).at(-1), semMotor = !!E && E.motores?.[nome] === false;
+  const falhou = !ocupado && ultima?.quem === "sheep" && /^(Acabou o limite do |Preciso que você entre de novo no |Deu ruim no |Não achei o |Demorei demais e parei|O .+ não respondeu)/.test(ultima.texto || "");
+  const aprovar = (s.aprovacoes || []).length > 0;
+  const sinal = semMotor || falhou || aprovar || s.fila_pausada ? "erro" : ocupado ? "espera" : "viva";
+  const situacaoMotor = semMotor ? "não instalado" : aprovar ? "precisa de você" : s.fila_pausada ? "fila parada" : falhou ? "deu erro" : ocupado ? "trabalhando" : s.viva ? "aberta" : "pronto";
+  $("motorNome").textContent = `${nome.charAt(0).toUpperCase() + nome.slice(1)} · ${situacaoMotor}`;
+  $("motorBtn").querySelector(".dot").className = `dot ${sinal}`;
   $("projAtivo").textContent = s.projeto ? `projeto: ${s.projeto}` : "Geral";
 }
 function recebeSessao(sid, dados) {
@@ -414,7 +702,7 @@ function recebeSessao(sid, dados) {
   sessoesUi.set(sid, s);
   if (sessAtual !== sid) return;
   const outra = sessaoExibida !== sid;
-  if (outra || !antes || !igual([antes.mensagens,antes.aprovacoes,antes.trabalhando,antes.arquivada,antes.fila], [s.mensagens,s.aprovacoes,s.trabalhando,s.arquivada,s.fila])) mostraMensagens(s);
+  if (outra || !antes || !igual([antes.mensagens,antes.aprovacoes,antes.trabalhando,antes.arquivada,antes.fila,antes.interrompida], [s.mensagens,s.aprovacoes,s.trabalhando,s.arquivada,s.fila,s.interrompida])) mostraMensagens(s);
   const mostrarParcial = () => {
     if (sessAtual !== sid) return;
     const atual = sessoesUi.get(sid), parcial = $("parcial"), seguir = pertoDoFim();
@@ -521,6 +809,34 @@ async function mudaPreferencia(controle, rota, corpo, secao, aviso) {
   finally { preferenciasPendentes.delete(secao); controles.forEach(c => { c.disabled = false; }); secoesUi.delete(secao); await carrega(); }
 }
 document.querySelectorAll("nav button[data-t]").forEach(b => b.onclick = () => tela(b.dataset.t));
+const avisosLogin = {}, esperandoLogin = {}, trabalhandoAntes = new Map();
+function situacaoLogin(k, instalado) {
+  const l = (E.login || {})[k];
+  if (!instalado) return {ponto: "off", texto: "Não instalado neste PC.", entrar: false};
+  if (!l) return {ponto: "on", texto: "Instalado.", entrar: false};
+  if (l.consultando) return {ponto: "off", texto: "Conferindo se você já entrou…", entrar: false};
+  if (l.logado) return {ponto: "on", texto: `Conectado${l.conta ? ` como ${l.conta}` : ""}${l.como ? ` (${l.como})` : ""}.`, entrar: false};
+  if (l.consultado === false) return {ponto: "off", texto: "Não consegui conferir agora. Se precisar, clique em Entrar.", entrar: true};
+  return {ponto: "off", texto: "Falta entrar.", entrar: true};
+}
+let avisoDiagnostico = "", copiandoDiagnostico = false;
+async function copiaDiagnostico() {
+  if (copiandoDiagnostico) return;
+  copiandoDiagnostico = true; avisoDiagnostico = "Juntando as informações…"; $("avisoDiagnostico").textContent = avisoDiagnostico;
+  try {
+    const {texto} = await api("GET", "/api/diagnostico");
+    await navigator.clipboard.writeText(texto);
+    avisoDiagnostico = "Copiado! Agora é só colar no grupo.";
+  } catch (_) { avisoDiagnostico = "Não consegui copiar. Tenta de novo."; }
+  finally { copiandoDiagnostico = false; $("avisoDiagnostico").textContent = avisoDiagnostico; carrega(); }
+}
+async function entrarNoMotor(nome) {
+  avisosLogin[nome] = "Abri uma janela para você entrar. Quando terminar, é só voltar aqui.";
+  esperandoLogin[nome] = Date.now();
+  try { confirmaResposta(await api("POST", "/api/motor/login", {nome})); }
+  catch (e) { delete esperandoLogin[nome]; avisosLogin[nome] = "Não achei esse programa neste PC. Instale e tente de novo."; }
+  carrega();
+}
 async function carrega() {
   if (consultaEstado) return consultaEstado;
   consultaEstado = (async () => {
@@ -541,16 +857,25 @@ async function carrega() {
   }, preferenciasPendentes.has("habilidades"));
   $("nAprov").hidden = !E.aprovacoes.length;
   if ($("nAprov").textContent !== String(E.aprovacoes.length)) $("nAprov").textContent = E.aprovacoes.length;
-  if (E.aprovacoes.length > nAprovAnterior) tocar("aprovacao");
+  if (E.aprovacoes.length > nAprovAnterior) { tocar("aprovacao"); avisar("Preciso do seu sim"); }
+  for (const x of E.sessoes) { if (trabalhandoAntes.get(x.id) && !x.trabalhando && !x.arquivada) avisar(`Terminei: ${tituloCurto(x.id) || "um pedido"}`); trabalhandoAntes.set(x.id, !!x.trabalhando); }
   nAprovAnterior = E.aprovacoes.length;
   atualizaSecao("aprovacoes", [E.aprovacoes,[...avisosAprovacoes]], () => {
     reconcilia("cardsAprov", E.aprovacoes.map(a => cardAprovacao(a)).join("") || "<p>Nada esperando o seu sim.</p>");
     ligaAprovacoes($("cardsAprov"));
   });
   atualizaSecao("pacotes", [E.pacotes,E.avisos], mostraPacotes);
-  atualizaSecao("conexoes", [E.motores,E.motor_padrao,E.conexoes,E.aprender,codigoTelegram,avisoTelegram,avisoAprender], () => {
-    reconcilia("cardsCon", `<h3 class="secao-titulo">Motores</h3><div class="card" data-chave="padrao"><label for="motorPadrao">Motor padrão</label><select id="motorPadrao"><option value="" disabled>Escolha um motor instalado</option>${Object.entries(E.motores).filter(([, v]) => v).map(([k]) => `<option value="${esc(k)}" ${k === E.motor_padrao ? "selected" : ""}>${esc(k)}</option>`).join("")}</select><p id="avisoMotor" aria-live="polite"></p></div>` + Object.entries(E.motores).map(([k, v]) => `<div class="card" data-chave="motor-${esc(k)}"><div class="linha"><h3>${esc(k)}</h3><span class="dot ${v ? "on" : "off"}"></span></div><p>${v ? "Instalado." : "Não instalado neste PC."}</p>${k === "antigravity" ? '<a href="https://antigravity.google" target="_blank" rel="noopener noreferrer">Instalar o Antigravity</a><p>baixe, instale e volte aqui</p>' : ""}</div>`).join("") +
-      '<h3 class="secao-titulo">Chaves e conexões</h3>' + CON.map(([n, t, g]) => `<div class="card" data-chave="con-${n}"><div class="linha"><h3>${t}</h3><span class="dot ${E.conexoes[n] ? "on" : "off"}"></span></div><p>${g}</p><form class="linha" data-c="${n}"><input type="${/_URL$|_NOME$/.test(n) ? "text" : "password"}" placeholder="${E.conexoes[n] ? "ligada · cole outra pra trocar" : "cole aqui"}" autocomplete="off"><button>Salvar</button></form>${n === "TELEGRAM_TOKEN" ? `<p>${E.conexoes.TELEGRAM_DONO ? "Dono vinculado." : "Salve o token e gere um código para me vincular a você."}</p><button class="sec" id="gerarTelegram" ${E.conexoes.TELEGRAM_TOKEN ? "" : "disabled"}>Gerar código</button><p id="codigoTelegram" aria-live="polite">${codigoTelegram ? `Mande /start ${esc(codigoTelegram)} para o seu bot` : esc(avisoTelegram)}</p><button class="sec" id="vincularTelegram" ${codigoTelegram ? "" : "disabled"}>Já mandei /start com o código</button>` : ""}</div>`).join("") + `<div class="card" data-chave="aprender"><h3>Aprender sozinha</h3><label><input type="checkbox" id="aprender" ${E.aprender !== false ? "checked" : ""}> Aprender enquanto a gente trabalha</label><p id="avisoAprender" aria-live="polite">${esc(avisoAprender)}</p></div>`);
+  for (const k of Object.keys(esperandoLogin)) if (E.login?.[k]?.logado || Date.now() - esperandoLogin[k] > 180000) { delete esperandoLogin[k]; if (E.login?.[k]?.logado) delete avisosLogin[k]; }
+  atualizaSecao("conexoes", [E.motores,E.motor_padrao,E.login,E.conexoes,E.aprender,codigoTelegram,avisoTelegram,avisoAprender,avisosLogin,avisoDiagnostico], () => {
+    reconcilia("cardsCon", `<h3 class="secao-titulo">Motores</h3><div class="card" data-chave="padrao"><label for="motorPadrao">Motor padrão</label><select id="motorPadrao"><option value="" disabled>Escolha um motor instalado</option>${Object.entries(E.motores).filter(([, v]) => v).map(([k]) => `<option value="${esc(k)}" ${k === E.motor_padrao ? "selected" : ""}>${esc(k)}</option>`).join("")}</select><p id="avisoMotor" aria-live="polite"></p></div>` + Object.entries(E.motores).map(([k, v]) => { const sit = situacaoLogin(k, v); return `<div class="card" data-chave="motor-${esc(k)}"><div class="linha"><h3>${esc(k)}</h3><span class="dot ${sit.ponto}"></span></div><p role="status">${esc(sit.texto)}</p>${sit.entrar ? `<button data-entrar="${esc(k)}">Entrar</button>` : ""}<p aria-live="polite">${esc(avisosLogin[k] || "")}</p>${k === "antigravity" ? '<a href="https://antigravity.google" target="_blank" rel="noopener noreferrer">Instalar o Antigravity</a><p>baixe, instale e volte aqui</p>' : ""}</div>`; }).join("") +
+      '<h3 class="secao-titulo">Chaves e conexões</h3>' + GRUPOS_CON.map(([grupo, resumo, campos]) => `<details class="card grupo-con" data-chave="grupo-${grupo}" data-grupo="${grupo}" ${abertosCon.has(grupo) ? "open" : ""}><summary><span><b>${grupo}</b><small>${resumo}</small></span><span class="dot ${campos.some(n => E.conexoes[n]) ? "on" : "off"}"></span></summary>` + CON.filter(([n]) => campos.includes(n)).map(([n, t, g]) => `<div class="card" data-chave="con-${n}"><div class="linha"><h3>${t}</h3><span class="dot ${E.conexoes[n] ? "on" : "off"}"></span></div><p>${g}</p><form class="linha" data-c="${n}"><input type="${/_URL$|_NOME$/.test(n) ? "text" : "password"}" placeholder="${E.conexoes[n] ? "ligada · cole outra pra trocar" : "cole aqui"}" autocomplete="off"><button>Salvar</button></form>${n === "TELEGRAM_TOKEN" ? `<p>${E.conexoes.TELEGRAM_DONO ? "Dono vinculado." : "Salve o token e gere um código para me vincular a você."}</p><button class="sec" id="gerarTelegram" ${E.conexoes.TELEGRAM_TOKEN ? "" : "disabled"}>Gerar código</button><p id="codigoTelegram" aria-live="polite">${codigoTelegram ? `Mande /start ${esc(codigoTelegram)} para o seu bot` : esc(avisoTelegram)}</p><button class="sec" id="vincularTelegram" ${codigoTelegram ? "" : "disabled"}>Já mandei /start com o código</button>` : ""}</div>`).join("") + (grupo === "Claude" ? `<div class="card" data-chave="claude-global"><h3>Usar também no terminal e no Orca</h3><p>${E.claude_global?.ligado ? "Ligado: o Claude deste computador está usando esta chave." : "Só para quem não paga o Claude. Troca o login da assinatura por esta chave."}</p><button id="claudeGlobal" ${!E.claude_global?.ligado && !(E.conexoes.ANTHROPIC_API_KEY && E.conexoes.ANTHROPIC_BASE_URL) ? "disabled" : ""}>${E.claude_global?.ligado ? "Voltar para a assinatura" : "Usar esta chave"}</button><p id="avisoGlobal" role="status" aria-live="polite"></p></div>` : "") + `</details>`).join("") + `<div class="card" data-chave="suporte"><h3>Deu algum problema?</h3><p>Copio um resumo do seu computador, sem senhas nem conversas, para você colar no grupo.</p><button id="copiarDiagnostico">Copiar diagnóstico</button><p id="avisoDiagnostico" aria-live="polite">${esc(avisoDiagnostico)}</p></div><div class="card" data-chave="aprender"><h3>Aprender sozinha</h3><label><input type="checkbox" id="aprender" ${E.aprender !== false ? "checked" : ""}> Aprender enquanto a gente trabalha</label><p id="avisoAprender" aria-live="polite">${esc(avisoAprender)}</p></div>`);
+    $("copiarDiagnostico").onclick = copiaDiagnostico;
+    $("cardsCon").querySelectorAll("[data-entrar]").forEach(b => b.onclick = () => entrarNoMotor(b.dataset.entrar));
+    document.querySelectorAll(".grupo-con").forEach(d => d.ontoggle = () => { d.open ? abertosCon.add(d.dataset.grupo) : abertosCon.delete(d.dataset.grupo); });
+    if ($("claudeGlobal")) $("claudeGlobal").onclick = async () => {
+      try { confirmaResposta(await api("POST", "/api/claude/global", {ligar: !E.claude_global?.ligado})); await carrega(); }
+      catch (erro) { $("avisoGlobal").textContent = erro.message || "Não consegui mudar."; }
+    };
     $("gerarTelegram").onclick = async () => {
       const r = await api("POST", "/api/telegram/codigo"); codigoTelegram = r.codigo; avisoTelegram = ""; carrega();
     };
@@ -576,8 +901,17 @@ async function carrega() {
     $("cardsCon").querySelectorAll("form[data-c]").forEach(f => f.onsubmit = async ev => { ev.preventDefault(); const input = f.querySelector("input"), v = input.value.trim(); if (!v) return; await api("POST", "/api/conexao", {nome: f.dataset.c, valor: v}); input.value = ""; input.blur(); carrega(); });
   }, editando("cardsCon") || salvandoAprender);
   atualizaSecao("projetos", E.projetos, () => {
-    reconcilia("cardsProj", `<form class="card" id="novoProj"><h3>+ Novo projeto</h3><input placeholder="nome do projeto" autocomplete="off"><button>Criar</button></form>` +
-      E.projetos.map(p => `<div class="card" data-chave="proj-${esc(p)}"><h3>${esc(p)}</h3><button class="sec" data-p="${esc(p)}">Conversar aqui</button></div>`).join(""));
+    reconcilia("cardsProj", `<div class="card" data-chave="usar-pasta"><h3>Trabalhar numa pasta sua</h3><p>Escolha a pasta do seu projeto no computador. Eu trabalho nos arquivos de lá, com a minha memória e as minhas regras.</p><button id="escolherPasta">Escolher pasta</button><p id="avisoPasta" role="status" aria-live="polite"></p></div><form class="card" id="novoProj"><h3>+ Novo projeto</h3><input placeholder="nome do projeto" autocomplete="off"><button>Criar</button></form>` +
+      E.projetos.map(p => `<div class="card" data-chave="proj-${esc(p)}"><h3>${esc(p)}</h3>${(E.pastas_projetos || {})[p] ? `<p>${esc(E.pastas_projetos[p])}</p>` : ""}<button class="sec" data-p="${esc(p)}">Conversar aqui</button></div>`).join(""));
+    $("escolherPasta").onclick = async () => {
+      $("avisoPasta").textContent = "A janela de pastas abriu. Se não apareceu, olha atrás desta janela.";
+      try {
+        const s = await api("POST", "/api/projeto/pasta", {motor: $("motor").value});
+        if (s.cancelado) { $("avisoPasta").textContent = ""; return; }
+        document.querySelector('[data-t="conversa"]').click(); await abre(s.id);
+        await enviar("Acabei de escolher esta pasta. Olha o que tem nela e me diz, em até 5 linhas, o que você entendeu do projeto.");
+      } catch (erro) { $("avisoPasta").textContent = erro.message || "Não consegui abrir essa pasta."; }
+    };
     $("novoProj").onsubmit = async ev => {
       ev.preventDefault(); const n = ev.target.querySelector("input").value.trim(); if (!n) return;
       const s = await api("POST", "/api/projeto", {nome: n, motor: $("motor").value});
@@ -694,6 +1028,12 @@ $("arquivarSessao").onclick = () => {
   if (sessoesUi.get(sessAtual)?.arquivada) { fechaMenus(); return acaoConversa("/api/sessao/arquivar", {arquivada:false}); }
   $("confirmacaoArquivar").hidden = false; $("moverConversa").hidden = true;
 };
+$("apagarSessao").onclick = () => {
+  const botao = $("apagarSessao");
+  if (botao.dataset.pronto !== "1") { botao.dataset.pronto = "1"; botao.textContent = "Confirmar: apagar de vez"; return; }
+  const sid = sessAtual; fechaMenus();
+  if (sid) apagarConversa(sid);
+};
 $("cancelarArquivar").onclick = () => { $("confirmacaoArquivar").hidden = true; };
 $("confirmarArquivar").onclick = () => { fechaMenus(); return acaoConversa("/api/sessao/arquivar", {arquivada:true}); };
 $("moverSessao").onclick = () => {
@@ -711,12 +1051,12 @@ $("resumir").onclick = () => { fechaMenus(); return acaoConversa("/api/resumir")
 $("novasMensagens").onclick = desce;
 $("rolo").onscroll = () => { if (pertoDoFim()) $("novasMensagens").hidden = true; };
 $("whatsappChip").onclick = () => tela("conexoes");
-document.addEventListener("click", ev => { if (!ev.target.closest(".menu,.pop,#maisBtn,#memBtn,#motorBtn,#novaSess,#barraContexto")) fechaMenus(); });
+document.addEventListener("click", ev => { if (!ev.target.closest(".menu,.pop,#maisBtn,#memBtn,#motorBtn,#novaSess,#barraContexto,#ctx,.edita")) fechaMenus(); });
 document.addEventListener("keydown", ev => {
   if (ev.ctrlKey && ev.key.toLowerCase() === "n") { ev.preventDefault(); $("novaSess").click(); }
   if (ev.ctrlKey && ev.key.toLowerCase() === "k") { ev.preventDefault(); $("buscaConversas").focus(); }
   if (ev.key === "Escape") {
-    const aberto = ["novaConversa", "motorPop", "memPop", "menuConversa"].some(id => !$(id).hidden);
+    const aberto = ["novaConversa", "motorPop", "memPop", "menuConversa", "ctx"].some(id => !$(id).hidden);
     if (aberto) { ev.preventDefault(); fechaMenus(); }
     else if (sessoesUi.get(sessAtual)?.trabalhando) { ev.preventDefault(); $("parar").click(); }
   }
@@ -742,7 +1082,7 @@ $("arquivoAnexo").onchange = async () => {
 };
 async function enviar(t, titulo) {
   if (!t || enviando || anexando || sessoesUi.get(sessAtual)?.arquivada) return;
-  enviando = true; audioLiberado = true; tocar("recebido");
+  enviando = true; audioLiberado = true; tocar("recebido"); pedePermissaoAviso();
   $("msgs").querySelectorAll("[data-opcao]").forEach(b => { b.disabled = true; });
   let sid;
   try {
@@ -766,7 +1106,13 @@ async function enviar(t, titulo) {
   }
 }
 $("form").onsubmit = ev => { ev.preventDefault(); enviar($("texto").value.trim()); };
+window.addEventListener("beforeunload", ev => {
+  const ocupada = x => x.trabalhando || (x.fila || []).length;
+  if (![...sessoesUi.values(), ...(E?.sessoes || [])].some(ocupada)) return;
+  ev.preventDefault(); ev.returnValue = "A Sheep ainda está trabalhando. Se fechar, ela para.";
+});
 carrega(); setInterval(carrega, 15000);
 setInterval(() => { if ($("conexoes").classList.contains("on")) return consultaWhatsapp(); }, 1500);
+setInterval(() => { if ($("conexoes").classList.contains("on") && (Object.keys(esperandoLogin).length || Object.values(E?.login || {}).some(l => l.consultando))) carrega(); }, 3000);
 
-api("GET", "/api/identidade").then(i => { if (i.trocado) { $("marcaNome").textContent = i.nome.toUpperCase(); document.title = i.nome; } }).catch(() => {});
+api("GET", "/api/identidade").then(i => { if (i.trocado) { $("marcaNome").textContent = i.nome.toUpperCase(); nomeAgente = i.nome; if (!ultimoAviso) document.title = i.nome; } }).catch(() => {});

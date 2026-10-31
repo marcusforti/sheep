@@ -41,7 +41,11 @@ def criar(titulo, projeto=None, motor="claude"):
 
 def listar():
     with _dados:
-        out = [_meta(d.name) for d in caminhos.sub("sessoes").iterdir() if (d / "sessao.json").exists()]
+        out = []
+        for d in caminhos.sub("sessoes").iterdir():
+            if not (d / "sessao.json").exists(): continue
+            try: out.append(_meta(d.name))
+            except (OSError, ValueError): continue  # uma conversa corrompida não pode derrubar o painel
         return sorted(out, key=lambda m: m["criada"], reverse=True)
 
 def anexar(id, quem, texto):
@@ -53,13 +57,23 @@ def anexar(id, quem, texto):
 def ler(id):
     with _dados:
         meta = _meta(id); arq = _pasta(id) / "mensagens.jsonl"
-        meta["mensagens"] = [json.loads(l) for l in arq.read_text(encoding="utf-8").splitlines()] if arq.exists() else []
+        meta["mensagens"] = []
+        for linha in (arq.read_text(encoding="utf-8", errors="ignore").splitlines() if arq.exists() else []):
+            try: meta["mensagens"].append(json.loads(linha))
+            except ValueError: continue  # linha cortada por uma queda: segue com o resto da conversa
         return meta
 
 def atualizar(id, **campos):
     with _dados:
         if 'modo_unico' in campos: _modos[str(_pasta(id))] = campos['modo_unico']
         meta = _meta(id); meta.update(campos); _grava(meta); return meta
+
+
+def apagar(id, remover):
+    """Roda `remover` (que apaga a pasta da conversa) com a conversa travada e esquece o modo guardado em memória."""
+    with _dados:
+        remover()
+        _modos.pop(str(_pasta(id)), None)
 
 
 def registrar_motor_id(id, motor_id):

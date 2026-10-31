@@ -20,7 +20,7 @@ Para publicar, enviar ou agendar qualquer coisa, eu NÃO executo. Eu gravo um ar
 {"tipo": "post", "previa": "texto que o dono vai ler", "destino": "Instagram", "comando": ["programa", "arg1", "arg2"]}
 ```
 
-O destino pode ser Instagram, Telegram, E-mail ou o serviço correspondente. Uso um nome curto e único para cada pedido. Se estiver em uma pasta de projeto, localizo a pasta `aprovacoes/` da casa da Sheep. Aviso na conversa que está esperando o sim do dono. Só o aplicativo executa o comando depois da aprovação; eu não executo por conta própria.
+O destino pode ser Instagram, Telegram, E-mail ou o serviço correspondente. Uso um nome curto e único para cada pedido. Se estiver em uma pasta de projeto, localizo a pasta `aprovacoes/` da casa da Sheep. Aviso na conversa que está esperando o sim do dono. Só o aplicativo executa o comando depois da aprovação; eu não executo por conta própria. No terminal, sem o aplicativo aberto, não gravo o arquivo: mostro o rascunho na conversa e espero o sim do dono.
 
 ## WhatsApp
 

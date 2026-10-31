@@ -237,7 +237,7 @@ $("desisti").onclick = async () => {
   $("desisti").hidden = true;
   cena(`<h1 class="grande">Eu <em>sabia!</em></h1><p id="legenda"></p>`);
   await tocar("21");
-  location.href = "/";
+  location.href = "/#personalizar";
 };
 
 (async () => {
@@ -262,7 +262,7 @@ $("desisti").onclick = async () => {
   await tocar("20");
   fundo("fim");
   cena(`<h1 class="grande">Agora é <em>${esc(respostas.nome)}</em></h1><p id="legenda">A casa é sua. As regras da casa continuam na parede.</p><div class="botoes"><button class="botao" id="entrar">Entrar</button></div>`);
-  $("entrar").onclick = () => { location.href = "/"; };
+  $("entrar").onclick = () => { location.href = "/#personalizar"; };
 })();
 </script>
 </body>

@@ -1,12 +1,14 @@
 <!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sheep</title>
-<link rel="icon" href="rosto.jpg"><link rel="stylesheet" href="estilo.css"></head><body class="app">
+<link rel="icon" href="rosto.jpg"><link rel="stylesheet" href="estilo.css"><link rel="stylesheet" href="personalizar.css"></head><body class="app">
 <aside>
   <div class="marca"><img src="rosto.jpg" alt=""><div><b id="marcaNome">SHEEP</b><small id="donoNome" hidden></small></div><button id="som" aria-label="Ligar som" aria-pressed="false">🔇</button></div>
   <div class="nova-area"><button class="nova" id="novaSess" aria-expanded="false" aria-controls="novaConversa"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span>Nova conversa</span><kbd>Ctrl N</kbd></button>
     <form class="pop" id="novaConversa" hidden><label for="ondeConversa">Onde?</label><select id="ondeConversa"><option value="">Geral</option></select><label for="motorNova">Motor</label><select id="motorNova"></select><label for="nomeConversa">Título (opcional)</label><input id="nomeConversa" maxlength="120" autocomplete="off"><div class="acoes-pacote"><button>Criar</button><button class="sec" type="button" id="cancelarNova">Cancelar</button></div></form>
   </div>
   <label class="busca" for="buscaConversas"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="buscaConversas" type="search" placeholder="Buscar conversas" aria-label="Buscar conversas" autocomplete="off"></label>
+  <div class="arvore-topo"><span>Projetos</span><span class="acoes-arvore"><button id="novoProjeto" aria-label="Novo projeto: escolher pasta" title="Novo projeto: escolher pasta"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button><button id="novaPasta" aria-label="Nova pasta de projetos" title="Nova pasta de projetos"><svg viewBox="0 0 24 24"><path d="M3 7V5h6l2 2h10v12H3zM12 11v5M9.5 13.5h5"/></svg></button></span></div>
   <nav class="lista sess" aria-label="Conversas"><div id="listaSess"></div><button class="sec" id="verArquivadas" aria-pressed="false">Ver arquivadas</button></nav>
+  <p id="avisoLateral" role="status" aria-live="polite"></p>
   <div class="rodape"><button class="zap" id="whatsappChip"><i></i><span id="whatsappResumo">WhatsApp não configurado</span></button>
     <nav class="icones" aria-label="Telas">
       <button class="ic on" data-t="conversa" data-dica="Conversa" aria-label="Conversa"><svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg></button>
@@ -15,10 +17,11 @@
       <button class="ic" data-t="aprovacoes" data-dica="Seu sim" aria-label="Seu sim"><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg><span class="n" id="nAprov" hidden></span></button>
       <button class="ic" data-t="conexoes" data-dica="Conexões" aria-label="Conexões"><svg viewBox="0 0 24 24"><path d="M9 7H7a5 5 0 0 0 0 10h2M15 7h2a5 5 0 0 1 0 10h-2M8 12h8"/></svg></button>
       <button class="ic" data-t="status" data-dica="Aprendi / Status" aria-label="Aprendi / Status"><svg viewBox="0 0 24 24"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/><circle cx="12" cy="12" r="3"/></svg></button>
-      <a class="ic" href="ritual.html" data-dica="Trocar o meu nome" aria-label="Trocar o meu nome" style="display:grid;place-items:center"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4"/></svg></a>
+      <button class="ic" data-t="personalizar" data-dica="Personalizar" aria-label="Personalizar"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4"/></svg></button>
     </nav>
   </div>
 </aside>
+<div class="ctx" id="ctx" role="menu" hidden></div>
 <main>
   <section class="tela on" id="conversa">
     <header id="topoConversa">
@@ -34,6 +37,7 @@
         <button id="resumir" disabled>Resumir conversa</button><button id="fecharSessao" disabled>Fechar sessão</button><button id="moverSessao" disabled>Mover para projeto…</button><hr><button class="perigo" id="arquivarSessao" disabled>Arquivar</button>
         <div id="confirmacaoArquivar" hidden><p>Arquivar esta conversa?</p><div class="acoes-pacote"><button id="confirmarArquivar">Confirmar arquivamento</button><button id="cancelarArquivar" class="sec">Cancelar</button></div></div>
         <form id="moverConversa" hidden><label for="projetoDestino">Mover para</label><select id="projetoDestino"></select><button>Mover conversa</button></form>
+        <hr><button class="perigo" id="apagarSessao" disabled>Apagar conversa</button>
       </div>
     </header>
     <div class="rolo" id="rolo"><div class="fio"><div class="msgs" id="msgs"></div><div id="filaPedidos" aria-live="polite" hidden></div></div></div>
@@ -48,5 +52,6 @@
   <section class="tela" id="aprovacoes"><div class="pagina"><h2>Seu sim<em>.</em></h2><p class="sub">Nada sai daqui sem você.</p><div class="cards" id="cardsAprov"></div></div></section>
   <section class="tela" id="conexoes"><div class="pagina"><h2>Conexões<em>.</em></h2><p class="sub">WhatsApp, motores e chaves.</p><div class="cards whatsapp-area" id="whatsappCon"></div><div class="cards" id="cardsCon"></div></div></section>
   <section class="tela" id="status"><div class="pagina"><h2>Aprendi<em>.</em></h2><p class="sub">O que eu guardei sobre você e como está a nossa casa.</p><p id="avisoStatus" role="status" aria-live="polite"></p><div class="cards" id="cardsStatus"></div></div></section>
+  <section class="tela" id="personalizar"><div class="pagina"><h2>Personalizar<em>.</em></h2><p class="sub">A casa é sua. Deixa com a sua cara.</p><p id="avisoPerso" role="status" aria-live="polite"></p><div class="perso-bloco"><h3>Nome</h3><div id="persoNome"></div></div><div class="perso-bloco"><h3>Cores</h3><p class="sub">Muda na hora. Sem medo: dá para voltar.</p><div id="persoCores"></div></div><div class="perso-bloco"><h3>Imagens</h3><p class="sub">Envie uma imagem sua ou peça para a IA gerar.</p><div id="persoImagens"></div></div><div class="perso-bloco"><h3>Telas</h3><p class="sub">Use as palavras do seu negócio.</p><div id="persoTelas"></div></div><div class="perso-bloco"><h3>Prompts master</h3><p class="sub">Prontos e já com o seu nome. Responda às perguntas e mande.</p><div id="persoPrompts"></div></div></div></section>
 </main>
-<script src="vendor/marked.min.js"></script><script src="vendor/purify.min.js"></script><script src="app.js"></script></body></html>
+<script src="vendor/marked.min.js"></script><script src="vendor/purify.min.js"></script><script src="app.js"></script><script src="personalizar.js"></script></body></html>

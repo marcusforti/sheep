@@ -1,9 +1,9 @@
-import base64, json, re, secrets, shutil, stat, subprocess, sys, threading, traceback, webbrowser
+import base64, json, os, re, secrets, shutil, stat, subprocess, sys, threading, traceback, webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlsplit
 from nucleo import aprovacoes, caminhos, cofre, habilidades, instalador, motor, rotinas, sessoes, telegram, pacotes, memorias, refletor
-from nucleo import whatsapp, identidade
+from nucleo import whatsapp, identidade, organizacao, pastas, login, aparencia, diagnostico, claude_global
 
 UI = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent.parent)) / "ui"
 CONEXOES = ["TELEGRAM_TOKEN", "TELEGRAM_DONO", "ZERNIO_API_KEY", "ELEVENLABS_API_KEY", "ELEVENLABS_VOZ", "ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL", "OPENAI_API_KEY", "OPENAI_BASE_URL", "EVOLUTION_URL", "EVOLUTION_API_KEY", "OUTRA_API_NOME", "OUTRA_API_URL", "OUTRA_API_KEY", "MOTOR_PADRAO", "APRENDER"]
@@ -28,6 +28,43 @@ def _sem_links(caminho):
         if stat.S_ISLNK(info.st_mode) or getattr(info, "st_file_attributes", 0) & 1024:
             raise ValueError("Essa pasta ou arquivo usa um link. Escolha um destino direto na casa da Sheep.")
 
+def _arquivos_sem_links(pasta):
+    """Conta os arquivos de uma pasta da casa e recusa se achar algum link por dentro."""
+    total = 0
+    for atual, subpastas, arquivos in os.walk(pasta):
+        for nome in subpastas + arquivos:
+            info = os.lstat(os.path.join(atual, nome))
+            if stat.S_ISLNK(info.st_mode) or getattr(info, "st_file_attributes", 0) & 1024:
+                raise ValueError("Achei um atalho (link) dentro dessa pasta. Por segurança, não apago.")
+        total += len(arquivos)
+    return total
+
+def _alvo_apagavel(sub, nome):
+    """A pasta `nome` dentro de casa/<sub>, só se for direta (sem link) e estiver mesmo dentro da casa da Sheep."""
+    casa, raiz = caminhos.casa().resolve(), caminhos.sub(sub)
+    alvo = raiz / nome
+    _sem_links(raiz); _sem_links(alvo)
+    if raiz.resolve().parent != casa or alvo.resolve().parent != raiz.resolve():
+        raise ValueError("Só apago o que está dentro da casa da Sheep.")
+    if not alvo.is_dir(): raise FileNotFoundError(nome)
+    return alvo
+
+def _apagar_pasta(alvo):
+    def liberar(funcao, caminho, _erro):
+        os.chmod(caminho, stat.S_IWRITE); funcao(caminho)
+    try: shutil.rmtree(alvo, **({"onexc": liberar} if sys.version_info >= (3, 12) else {"onerror": liberar}))
+    except OSError: pass
+    if alvo.exists(): raise ValueError("Não consegui apagar tudo. Feche o que estiver usando essa pasta e tente de novo.")
+
+def _titulo_do_pedido(texto):
+    """As primeiras 6 palavras do pedido, sem os marcadores de anexo e com no máximo 50 letras."""
+    limpo = " ".join(re.sub(r"\[arquivo:[^\]\r\n]*\]", " ", texto or "").split())
+    titulo = " ".join(limpo.split()[:6])[:50].rstrip(" ,;:-")
+    return titulo[:1].upper() + titulo[1:]
+
+def _projetos():
+    return sorted(d.name for d in caminhos.sub("projetos").iterdir() if d.is_dir())
+
 def _estado():
     dono = caminhos.casa() / "casa" / "dono.md"
     linhas = dono.read_text(encoding="utf-8").splitlines() if dono.exists() else []
@@ -47,9 +84,9 @@ def _estado():
                 pass
     return {"instalacao": instalador.estado(), "proximo": instalador.proximo(), "passos": instalador.PASSOS,
             "dono_nome": nome or None, "primeiro_uso": not dono.exists(), "motor_padrao": motor.padrao(),
-            "motores": motor.instalados(), "conexoes": cofre.status(CONEXOES), "habilidades": habilidades.listar(),
+            "motores": motor.instalados(), "login": login.estado(), "conexoes": cofre.status(CONEXOES), "habilidades": habilidades.listar(),
             "aprovacoes": aprovacoes.pendentes(), "sessoes": sessoes.listar(),
-            "projetos": sorted(d.name for d in caminhos.sub("projetos").iterdir() if d.is_dir()),
+            "projetos": _projetos(), "pastas_projetos": pastas.todas(), "claude_global": claude_global.estado(), "organizacao": organizacao.estado(_projetos()),
             "rotinas": rotinas.listar(), **parciais, "avisos": avisos,
             "aprender": cofre.ler("APRENDER") != "0", "whatsapp": whatsapp.estado()}
 
@@ -73,6 +110,11 @@ def iniciar(porta=0, ao_mostrar=None, refletir=None):
                     "atual": {k: t["atual"][k] for k in ("id", "texto")} if t["atual"] else None,
                     "revisao": t["revisao"] + (sessao or {}).get("revisao", 0)}
         estado.update(viva=motor.viva(sid), trabalhando=estado['trabalhando'] or motor.ocupada(sid))
+        if sessao and "mensagens" in sessao:
+            # Pedido do dono sem resposta e nada rodando: a janela fechou no meio.
+            ultima = sessao["mensagens"][-1] if sessao["mensagens"] else {}
+            estado["interrompida"] = (ultima.get("quem") == "dono" and not estado["trabalhando"] and not estado["resumindo"]
+                                      and not estado["fila"] and not estado["fila_pausada"] and not sessao.get("arquivada"))
         return estado
 
     def guardar(sid, evento):
@@ -90,6 +132,27 @@ def iniciar(porta=0, ao_mostrar=None, refletir=None):
             lista.append(dict(evento)); del lista[:-50]
             totais[sid] = totais.get(sid, 0) + 1
 
+    def nomear(sid, texto):
+        """Conversa que ainda se chama 'Nova conversa' ganha o nome do primeiro pedido, sem chamar modelo.
+        Título que a pessoa escolheu, de projeto ou do WhatsApp não muda."""
+        try:
+            sessao = sessoes.ler(sid)
+            if sessao.get("titulo") not in ("Nova conversa", "nova") or sessao.get("titulo_manual") or sessao.get("origem"): return
+            titulo = _titulo_do_pedido(texto)
+            if titulo: sessoes.atualizar(sid, titulo=titulo)
+        except (OSError, ValueError): pass
+
+    def parada(sid):
+        """Conversa sem pedido rodando nem na fila. Chamar com `trava`."""
+        t = trabalho(sid)
+        return not (t["trabalhando"] or t["fila"] or t["resumindo"] or motor.ocupada(sid))
+
+    def esquecer(sids):
+        with trava:
+            for sid in sids:
+                for memoria in (eventos, totais, trabalhos): memoria.pop(sid, None)
+        organizacao.esquecer_conversas(set(sids))
+
     def executar(sid):
         while True:
             with trava:
@@ -105,6 +168,7 @@ def iniciar(porta=0, ao_mostrar=None, refletir=None):
                 encerrando.wait(.05)
                 continue
             try:
+                if not item["resumo"]: nomear(sid, item["texto"])
                 callback = lambda evento: guardar(sid, evento)
                 if item["resumo"]:
                     motor.resumir(sid, ao_evento=callback, cancelar=cancelar)
@@ -183,6 +247,7 @@ def iniciar(porta=0, ao_mostrar=None, refletir=None):
             if self.path.startswith("/api/"):
                 if not self._ok(): return self._json({"erro": "sem permissão"}, 403)
                 if self.path == "/api/identidade": return self._json(identidade.ler())
+                if self.path == "/api/aparencia": return self._json(aparencia.tudo())
                 if self.path == "/api/prompt-mestre":
                     for arq in (caminhos.casa() / "prompt-mestre.md", Path(__file__).resolve().parents[2] / "modelo" / "prompt-mestre.md"):
                         if arq.exists(): return self._json({"texto": arq.read_text(encoding="utf-8")})
@@ -191,6 +256,7 @@ def iniciar(porta=0, ao_mostrar=None, refletir=None):
                     estado = _estado()
                     estado["sessoes"] = [{**s, **situacao(s["id"], s)} for s in estado["sessoes"]]
                     return self._json(estado)
+                if self.path == "/api/diagnostico": return self._json({"texto": diagnostico.montar()})
                 if self.path == "/api/whatsapp/estado": return self._json(whatsapp.estado())
                 if self.path.startswith("/api/sessao/"):
                     url = urlsplit(self.path)
@@ -217,9 +283,16 @@ def iniciar(porta=0, ao_mostrar=None, refletir=None):
                         return self._json({**sessao, **situacao(sid, sessao)})
                 return self._json({"erro": "não encontrado"}, 404)
             nome = "instalador.html" if self.path in ("/", "") and instalador.proximo() else ("app.html" if self.path in ("/", "") else self.path.lstrip("/").split("?")[0])
+            if nome.startswith("voz/") and identidade.ler()["trocado"]: return self._json({"erro": "não encontrado"}, 404)
+            propria = aparencia.imagem_da_ui(nome)
+            if propria:
+                self.send_response(200); self.send_header("Content-Type", propria[1]); self.send_header("Cache-Control", "no-store")
+                self.send_header("Content-Length", str(len(propria[0]))); self.end_headers(); self.wfile.write(propria[0])
+                return
             arq = (UI / nome).resolve()
             if UI.resolve() not in arq.parents or not arq.is_file(): return self._json({"erro": "não encontrado"}, 404)
             b = arq.read_bytes().replace(b"__TOKEN__", token.encode()) if arq.suffix in (".html", ".js") else arq.read_bytes()
+            if arq.name == "estilo.css": b = aparencia.tingir(b)
             self.send_response(200); self.send_header("Content-Type", TIPOS.get(arq.suffix, "application/octet-stream"))
             self.send_header("Content-Length", str(len(b))); self.end_headers(); self.wfile.write(b)
         def do_POST(self):
@@ -238,6 +311,9 @@ def iniciar(porta=0, ao_mostrar=None, refletir=None):
                     self.connection.settimeout(anterior)
                 return self._json({"erro": "sem permissão"}, 403)
             p = self.path
+            if p.startswith("/api/aparencia"):
+                try: return self._aparencia(p)
+                except (ValueError, UnicodeError) as erro: return self._json({"erro": str(erro)}, 400)
             if p in ("/api/anexo", "/api/sessao/motor", "/api/sessao/mover"):
                 try:
                     tamanhos = self.headers.get_all("Content-Length", [])
@@ -254,7 +330,18 @@ def iniciar(porta=0, ao_mostrar=None, refletir=None):
                     return self._json({"erro": str(erro)}, 400)
                 except FileNotFoundError:
                     return self._json({"erro": "Conversa não encontrada."}, 404)
-            if p in ("/api/conversar", "/api/parar", "/api/resumir", "/api/fila/cancelar", "/api/fila/retomar", "/api/sessao/renomear", "/api/sessao/fechar", "/api/sessao/arquivar"):
+            if p in ("/api/projeto/resumo", "/api/projeto/apagar"):
+                try:
+                    tamanho = int(self.headers.get("Content-Length") or 0)
+                    if not 0 <= tamanho <= 4096: raise ValueError("Pedido inválido.")
+                    c = self._corpo()
+                    if not isinstance(c, dict): raise ValueError("Pedido inválido.")
+                    return self._projeto_apagar(p, c)
+                except (ValueError, UnicodeError) as erro:
+                    return self._json({"erro": str(erro)}, 400)
+                except FileNotFoundError:
+                    return self._json({"erro": "Esse projeto não existe mais."}, 404)
+            if p in ("/api/conversar", "/api/parar", "/api/resumir", "/api/fila/cancelar", "/api/fila/retomar", "/api/sessao/renomear", "/api/sessao/fechar", "/api/sessao/arquivar", "/api/sessao/apagar"):
                 try:
                     tamanho = int(self.headers.get("Content-Length") or 0)
                     if not 0 <= tamanho <= 1024 * 1024: raise ValueError("Pedido inválido.")
@@ -291,6 +378,9 @@ def iniciar(porta=0, ao_mostrar=None, refletir=None):
                 except ValueError as erro:
                     return self._json({"erro": str(erro)}, 400)
             c = self._corpo()
+            if p.startswith("/api/organizacao/"):
+                try: return self._organizacao(p, c)
+                except ValueError as erro: return self._json({"erro": str(erro)}, 400)
             if p in ("/api/sessao", "/api/projeto") and c.get("motor", "claude") not in motor.MOTORES:
                 return self._json({"erro": "motor desconhecido"}, 400)
             if p == "/api/identidade":
@@ -308,10 +398,14 @@ def iniciar(porta=0, ao_mostrar=None, refletir=None):
                 if not caminho: return self._json({"ok": False})
                 subprocess.Popen([caminho], creationflags=subprocess.CREATE_NEW_CONSOLE)
                 return self._json({"ok": True})
+            if p == "/api/motor/login":
+                nome = c.get("nome")
+                if nome not in login.ENTRAR: return self._json({"erro": "motor desconhecido"}, 400)
+                return self._json({"ok": login.entrar(nome)})
             if p == "/api/instalar":
                 if c.get("passo") not in [passo["id"] for passo in instalador.PASSOS]:
                     return self._json({"erro": "passo desconhecido"}, 400)
-                if "pular" in c and (not isinstance(c["pular"], bool) or c["pular"] and c["passo"] not in ("whatsapp", "telegram")):
+                if "pular" in c and (not isinstance(c["pular"], bool) or c["pular"] and c["passo"] not in ("login", "whatsapp", "telegram")):
                     return self._json({"erro": "Esse passo precisa ser concluído."}, 400)
                 log = []
                 opcoes = {"pular": True} if c.get("pular") else {}
@@ -327,6 +421,18 @@ def iniciar(porta=0, ao_mostrar=None, refletir=None):
                 cofre.guardar(c["nome"], c["valor"]); return self._json({"ok": True})
             if p == "/api/telegram/codigo": return self._json({"codigo": telegram.novo_codigo()})
             if p == "/api/telegram/vincular": return self._json({"chat": telegram.vincular(cofre.ler("TELEGRAM_CODIGO"))})
+            if p == "/api/claude/global":
+                try: return self._json(claude_global.ligar() if c.get("ligar") else claude_global.desligar())
+                except (OSError, ValueError) as erro: return self._json({"erro": str(erro)}, 400)
+            if p == "/api/projeto/pasta":
+                caminho = c.get("caminho") or pastas.escolher()
+                if not caminho: return self._json({"cancelado": True})
+                try: pasta = pastas.validar(caminho)
+                except ValueError as erro: return self._json({"erro": str(erro)}, 400)
+                nome = "".join(ch for ch in pasta.name if ch.isalnum() or ch in " -_").strip() or "Projeto"
+                pastas.ligar(nome, pasta)
+                if c.get("grupo"): organizacao.adotar_projeto(_projetos(), nome, c.get("grupo"))
+                return self._json(sessoes.criar(nome, projeto=nome, motor=c.get("motor", "claude")))
             if p == "/api/projeto":
                 nome = "".join(ch for ch in c["nome"] if ch.isalnum() or ch in " -_").strip()
                 if not nome: return self._json({"erro": "nome vazio"}, 400)
@@ -334,6 +440,37 @@ def iniciar(porta=0, ao_mostrar=None, refletir=None):
                 return self._json(sessoes.criar(nome, projeto=nome, motor=c.get("motor", "claude")))
             if p == "/api/rotina": rotinas.ligar(c["nome"], c["ativo"]); return self._json({"ok": True})
             return self._json({"erro": "não encontrado"}, 404)
+
+        def _aparencia(self, p):
+            tamanho = self.headers.get("Content-Length", "")
+            if not tamanho.isdigit() or self.headers.get("Transfer-Encoding"): raise ValueError("Pedido inválido.")
+            if int(tamanho) > 4 * ((aparencia.LIMITE_IMAGEM + 2) // 3) + 4096: return self._json({"erro": "Essa imagem passou de 8 MB."}, 413)
+            c = self._corpo()
+            if not isinstance(c, dict): raise ValueError("Pedido inválido.")
+            if p == "/api/aparencia": return self._json(aparencia.gravar(c))
+            if p == "/api/aparencia/imagem": return self._json(aparencia.guardar_imagem(c.get("alvo"), c.get("base64")))
+            if p == "/api/aparencia/limpar": return self._json(aparencia.limpar(c.get("alvo")))
+            return self._json({"erro": "não encontrado"}, 404)
+
+        def _organizacao(self, p, c):
+            if not isinstance(c, dict): raise ValueError("Pedido inválido.")
+            projetos = _projetos()
+            acao = p.removeprefix("/api/organizacao/")
+            if acao == "pasta": organizacao.criar_pasta(projetos, c.get("nome"))
+            elif acao == "pasta/renomear": organizacao.renomear_pasta(projetos, c.get("id"), c.get("nome"))
+            elif acao == "pasta/excluir": organizacao.excluir_pasta(projetos, c.get("id"))
+            elif acao == "projeto":
+                nome = "".join(ch for ch in str(c.get("nome") or "") if ch.isalnum() or ch in " -_").strip()
+                if not nome: raise ValueError("Escolha um nome para o projeto.")
+                _nome_seguro(nome)
+                if nome.casefold() == "geral" or nome in projetos: raise ValueError("Já existe um projeto com esse nome.")
+                (caminhos.sub("projetos") / nome).mkdir(exist_ok=True)
+                organizacao.adotar_projeto(_projetos(), nome, c.get("pasta"))
+            elif acao == "projeto/mover": organizacao.mover_projeto(projetos, c.get("projeto"), c.get("pasta"))
+            elif acao == "projeto/renomear": organizacao.renomear_projeto(projetos, c.get("projeto"), c.get("nome"))
+            elif acao == "recolher": organizacao.recolher(projetos, c.get("chave"), bool(c.get("recolhido")))
+            else: return self._json({"erro": "não encontrado"}, 404)
+            return self._json({"ok": True, "organizacao": organizacao.estado(_projetos())})
 
         def _anexo(self, c):
             if set(c) != {"nome", "base64"} or not isinstance(c["base64"], str): raise ValueError("Pedido inválido.")
@@ -368,6 +505,18 @@ def iniciar(porta=0, ao_mostrar=None, refletir=None):
             sid = c.get("sessao")
             if not isinstance(sid, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", sid): raise ValueError("sessão inválida")
             if set(c) != {"sessao"} | extras.get(p, set()): raise ValueError("Pedido inválido.")
+            if p == "/api/sessao/apagar":
+                with trava:
+                    reserva = motor.reservar(sid) if parada(sid) else None
+                    if reserva is None: return self._json({"erro": "Essa conversa está trabalhando ou na fila. Espera terminar para apagar."}, 409)
+                    try:
+                        alvo = _alvo_apagavel("sessoes", sid)
+                        _arquivos_sem_links(alvo)
+                        motor.adormecer(sid)
+                        sessoes.apagar(sid, lambda: _apagar_pasta(alvo))
+                    finally: reserva.release()
+                    esquecer([sid])
+                return self._json({"ok": True})
             sessao = sessoes.ler(sid)
             if p in ("/api/conversar", "/api/resumir"):
                 if p == "/api/conversar" and (not isinstance(c["texto"], str) or not c["texto"].strip()): raise ValueError("Escreva seu pedido.")
@@ -396,7 +545,7 @@ def iniciar(porta=0, ao_mostrar=None, refletir=None):
                 elif p == "/api/sessao/renomear":
                     titulo = c["titulo"]
                     if not isinstance(titulo, str) or not titulo.strip() or len(titulo.strip()) > 120 or any(ord(x) < 32 for x in titulo): raise ValueError("Use um título de 1 a 120 caracteres.")
-                    sessoes.atualizar(sid, titulo=titulo.strip())
+                    sessoes.atualizar(sid, titulo=titulo.strip(), titulo_manual=True)
                 elif p in ("/api/sessao/motor", "/api/sessao/mover"):
                     campo = "motor" if p.endswith("motor") else "projeto"
                     valor = c[campo]
@@ -425,6 +574,36 @@ def iniciar(porta=0, ao_mostrar=None, refletir=None):
                     if p.endswith("arquivar"): sessoes.atualizar(sid, arquivada=c["arquivada"])
                 t["revisao"] += 1
             return self._json({"ok": True})
+
+        def _projeto_apagar(self, p, c):
+            if set(c) != {"projeto"}: raise ValueError("Pedido inválido.")
+            nome = _nome_seguro(c["projeto"])
+            if nome.casefold() in ("geral", "@whatsapp"): raise ValueError("O Geral e o WhatsApp não se apagam.")
+            with trava:
+                if nome not in _projetos(): raise FileNotFoundError(nome)
+                alvo = _alvo_apagavel("projetos", nome)
+                arquivos = _arquivos_sem_links(alvo)
+                ids = [s["id"] for s in sessoes.listar() if s.get("projeto") == nome and re.fullmatch(r"[A-Za-z0-9_-]{1,128}", str(s.get("id")))]
+                if p == "/api/projeto/resumo":
+                    return self._json({"ok": True, "conversas": len(ids), "arquivos": arquivos, "externa": bool(pastas.externa(nome))})
+                reservas, apagadas = [], []
+                try:
+                    for sid in ids:
+                        reserva = motor.reservar(sid) if parada(sid) else None
+                        if reserva is None: return self._json({"erro": "Tem conversa trabalhando ou na fila nesse projeto. Espera terminar para apagar."}, 409)
+                        reservas.append(reserva)
+                    alvos = [_alvo_apagavel("sessoes", sid) for sid in ids]
+                    for a in alvos: _arquivos_sem_links(a)
+                    for sid, a in zip(ids, alvos):
+                        motor.adormecer(sid)
+                        sessoes.apagar(sid, lambda a=a: _apagar_pasta(a))
+                        apagadas.append(sid)
+                    _apagar_pasta(alvo)
+                finally:
+                    for reserva in reservas: reserva.release()
+                    esquecer(apagadas)
+                organizacao.esquecer_projeto(_projetos())
+                return self._json({"ok": True, "conversas": len(ids), "organizacao": organizacao.estado(_projetos())})
 
         def _whatsapp(self, p, c):
             if p == "/api/whatsapp/conectar":

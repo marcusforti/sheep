@@ -1,0 +1,124 @@
+[
+  {
+    "id": "cores",
+    "titulo": "As cores da minha marca",
+    "resumo": "Descobre o código exato das cores para usar aqui.",
+    "motor": "qualquer",
+    "perguntas": [
+      {
+        "id": "marca",
+        "rotulo": "Como é a sua marca hoje?",
+        "exemplo": "site, @ do Instagram ou as cores que você usa"
+      },
+      {
+        "id": "sensacao",
+        "rotulo": "O que ela precisa passar?",
+        "exemplo": "confiança e sofisticação"
+      }
+    ],
+    "texto": "Você é um designer de marca. Ajude {{dono}} a escolher a cor de destaque do aplicativo de {{agente}}.\n\nMarca hoje: {{marca}}.\nSensação desejada: {{sensacao}}.\n\nO aplicativo tem fundo escuro, então a cor precisa ter bom contraste com texto branco.\n\nMe dê 3 opções, cada uma com: nome da cor, código hexadecimal no formato #RRGGBB, o que ela transmite e por que combina comigo. Termine dizendo qual você escolheria. Não altere nenhum arquivo: eu mesmo colo o código na tela Personalizar."
+  },
+  {
+    "id": "rosto",
+    "titulo": "O rosto do {{agente}}",
+    "resumo": "A foto que aparece no chat, ao lado de cada resposta.",
+    "motor": "codex",
+    "imagem": "rosto",
+    "perguntas": [
+      {
+        "id": "visual",
+        "rotulo": "Como {{agente}} é?",
+        "exemplo": "uma coruja de terno, um robô de óculos, uma mulher de 30 anos estilizada"
+      },
+      {
+        "id": "estilo",
+        "rotulo": "Em que estilo?",
+        "exemplo": "3D de filme de animação, ilustração, foto realista"
+      },
+      {
+        "id": "cores",
+        "rotulo": "Quais cores da sua marca?",
+        "exemplo": "azul-marinho e dourado"
+      }
+    ],
+    "texto": "Você é um diretor de arte. Crie o retrato oficial de {{agente}}, o agente de IA de {{dono}}.\n\nQuem é {{agente}}: {{personalidade}}. Missão: {{missao}}.\nAparência: {{visual}}.\nEstilo: {{estilo}}.\nCores da marca: {{cores}}.\n\nRegras da imagem:\n- Formato quadrado, 1024x1024.\n- Do peito para cima, olhando para a câmera, com expressão marcante e simpática.\n- Fundo escuro e simples, sem texto, sem logo e sem marca-d'água.\n- Precisa continuar legível bem pequena, num círculo de 40 pixels.\n\nGere a imagem com a sua ferramenta de geração de imagens. Depois salve o arquivo final em aparencia/rosto.png, na pasta da casa ({{casa}}), com menos de 8 MB. Se a pasta não existir, crie. Se já existir uma imagem aparencia/rosto, renomeie antes para rosto-anterior com a mesma extensão, para eu não perder a minha. Por fim, me diga em uma linha que está pronto."
+  },
+  {
+    "id": "recepcao",
+    "titulo": "{{agente}} de corpo inteiro",
+    "resumo": "A imagem grande que recebe você na tela inicial.",
+    "motor": "codex",
+    "imagem": "recepcao",
+    "perguntas": [
+      {
+        "id": "visual",
+        "rotulo": "Como {{agente}} é?",
+        "exemplo": "a mesma aparência do rosto que você criou"
+      },
+      {
+        "id": "cena",
+        "rotulo": "O que está fazendo?",
+        "exemplo": "de braços cruzados, sorrindo, com um tablet na mão"
+      }
+    ],
+    "texto": "Você é um diretor de arte. Crie a imagem de recepção de {{agente}}, o agente de IA de {{dono}}.\n\nPersonalidade: {{personalidade}}.\nAparência: {{visual}}.\nCena: {{cena}}.\n\nSe existir uma imagem aparencia/rosto (png, jpg ou webp) na casa, use como referência para manter a mesma aparência.\n\nRegras da imagem:\n- Formato quadrado, 1024x1024.\n- Corpo inteiro, centralizado, com folga nas bordas.\n- Fundo escuro liso, sem texto, sem logo e sem marca-d'água.\n\nGere a imagem com a sua ferramenta de geração de imagens. Depois salve o arquivo final em aparencia/recepcao.png, na pasta da casa ({{casa}}), com menos de 8 MB. Se a pasta não existir, crie. Se já existir uma imagem aparencia/recepcao, renomeie antes para recepcao-anterior com a mesma extensão, para eu não perder a minha. Por fim, me diga em uma linha que está pronto."
+  },
+  {
+    "id": "fundo",
+    "titulo": "O fundo do aplicativo",
+    "resumo": "A imagem atrás da conversa e das telas.",
+    "motor": "codex",
+    "imagem": "fundo",
+    "perguntas": [
+      {
+        "id": "lugar",
+        "rotulo": "Qual é o cenário do seu negócio?",
+        "exemplo": "um escritório de advocacia à noite, uma clínica, uma cozinha de restaurante"
+      },
+      {
+        "id": "cores",
+        "rotulo": "Quais cores da sua marca?",
+        "exemplo": "verde-escuro e creme"
+      }
+    ],
+    "texto": "Você é um diretor de arte. Crie uma imagem de fundo para o aplicativo de {{agente}}, o agente de IA de {{dono}}.\n\nCenário: {{lugar}}.\nCores: {{cores}}.\n\nRegras da imagem:\n- Formato horizontal, 16:9.\n- Escura e calma: vai ficar atrás de texto, então sem contraste forte e sem detalhe pequeno.\n- Sem pessoas, sem texto, sem logo e sem marca-d'água.\n\nGere a imagem com a sua ferramenta de geração de imagens. Depois salve o arquivo final em aparencia/fundo.png, na pasta da casa ({{casa}}), com menos de 8 MB. Se a pasta não existir, crie. Se já existir uma imagem aparencia/fundo, renomeie antes para fundo-anterior com a mesma extensão, para eu não perder a minha. Por fim, me diga em uma linha que está pronto."
+  },
+  {
+    "id": "alma",
+    "titulo": "A alma do {{agente}}",
+    "resumo": "Aprofunda quem é {{agente}}, com as palavras do seu negócio.",
+    "motor": "qualquer",
+    "perguntas": [
+      {
+        "id": "negocio",
+        "rotulo": "O que o seu negócio faz?",
+        "exemplo": "clínica de estética em Curitiba"
+      },
+      {
+        "id": "admiro",
+        "rotulo": "Quem é a sua inspiração de jeito?",
+        "exemplo": "aquele atendente que todo cliente adora"
+      }
+    ],
+    "texto": "Quero aprofundar quem você é. Hoje você se chama {{agente}}, seu dono é {{dono}}.\n\nO que eu sei até agora:\n- Personalidade: {{personalidade}}\n- Como fala: {{fala}}\n- Missão: {{missao}}\n- Como me chama: {{chama}}\n- O que nunca faz: {{nunca}}\n\nMeu negócio: {{negocio}}.\nInspiração de jeito: {{admiro}}.\n\nLeia {{casa}}/casa/identidade.md e, se existir, {{casa}}/casa/dono.md. Depois crie o arquivo {{casa}}/casa/alma-do-agente.md com: quem você é em 5 linhas, 10 frases que só você falaria, 10 frases que você jamais falaria e como você reage quando eu estou com pressa, quando erro e quando um cliente reclama.\n\nNão altere identidade.md. Se alma-do-agente.md já existir, renomeie antes para alma-do-agente-anterior.md. Não invente fato sobre mim: se faltar algo, me pergunte, uma pergunta por vez. No fim, me mostre as 3 melhores frases."
+  },
+  {
+    "id": "telas",
+    "titulo": "Arrumar as telas",
+    "resumo": "{{agente}} renomeia as telas e escreve a frase da caixa de pedido.",
+    "motor": "qualquer",
+    "perguntas": [
+      {
+        "id": "uso",
+        "rotulo": "Para que você vai usar mais?",
+        "exemplo": "atender cliente e fazer conteúdo"
+      },
+      {
+        "id": "palavras",
+        "rotulo": "Que palavras a sua equipe usa?",
+        "exemplo": "chamamos projeto de caso e cliente de paciente"
+      }
+    ],
+    "texto": "Quero que o aplicativo fale a língua do meu negócio. Você é {{agente}}, e o dono é {{dono}}.\n\nUso principal: {{uso}}.\nPalavras do meu dia a dia: {{palavras}}.\n\nEdite o arquivo aparencia/ajustes.json, na pasta da casa ({{casa}}). Se ele não existir, crie. Mexa apenas nestes campos e preserve os outros:\n- \"frase\": o texto da caixa de pedido, com até 80 caracteres, no seu jeito de falar.\n- \"telas\": um objeto onde as chaves podem ser só projetos (tela Projetos), pacotes (tela Pacotes), conexoes (tela Conexões) e status (tela Aprendi). Cada uma recebe {\"nome\": \"novo nome com até 24 caracteres\", \"oculta\": false}. Use \"oculta\": true somente para o que eu não vou usar. Não esconda conexoes sem me avisar: é lá que eu ligo o WhatsApp e as chaves.\n\nNão mude a tela Conversa nem a tela Seu sim. Antes de gravar, me mostre a proposta e espere o meu ok. Depois de gravar, me avise: a mudança aparece sozinha em alguns segundos."
+  }
+]

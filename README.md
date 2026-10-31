@@ -22,7 +22,7 @@ curl -fsSL https://raw.githubusercontent.com/marcusforti/sheep/main/instalar.sh 
 
 ## O que vem junto
 
-Git, Node.js, Python, ffmpeg, Claude Code, Codex, Orca, a casa da Sheep na pasta `Sheep` e as skills de Instagram e carrossel. Leva de 5 a 15 minutos. Se a internet cair, rode a mesma linha de novo.
+Git, Node.js, Python, ffmpeg, Claude Code, Codex, Orca, a casa da Sheep na pasta `Sheep`, as skills de Instagram e carrossel, o [Superpowers](https://github.com/obra/superpowers) (MIT), o [yt-dlp](https://github.com/yt-dlp/yt-dlp) com a skill `assistir-video` e, se der, os aplicativos do Claude e do Codex. Leva de 5 a 20 minutos, com a Sheep falando o que está acontecendo, e a tela dela só abre quando tudo termina. Se a internet cair, rode a mesma linha de novo. Para pular a voz, defina `SHEEP_SEM_VOZ=1` antes de rodar; para pular o Orca, `SHEEP_SEM_ORCA=1`; para pular os aplicativos, `SHEEP_SEM_APPS=1`.
 
 ## Enquanto instala
 

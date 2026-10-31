@@ -71,7 +71,7 @@ def _transcrever(arquivo, chave):
 def _voz(texto):
     if cofre.ler("WHATSAPP_VOZ") != "1" or not texto or len(texto) > 600:
         return None
-    chave, voz = cofre.ler("ELEVENLABS_API_KEY"), cofre.ler("ELEVENLABS_VOZ")
+    chave, voz = cofre.ler("ELEVENLABS_API_KEY"), cofre.ler("ELEVENLABS_VOZ") or "GM2UA3fbsIaLHcswCDX9"
     if not chave or not voz:
         return None
     pasta = caminhos.sub("whatsapp-midia")

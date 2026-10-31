@@ -76,7 +76,7 @@ def _cmds(id):
 
 def executar(id, rodar=None, log=None, pular=False):
     if pular:
-        if id not in ("whatsapp", "telegram"): raise ValueError("Esse passo precisa ser concluído.")
+        if id not in ("login", "whatsapp", "telegram"): raise ValueError("Esse passo precisa ser concluído.")
         if id == "whatsapp":
             from nucleo import whatsapp
             cofre.guardar("WHATSAPP_LIGADO", "0")

@@ -5,6 +5,9 @@
 # Usa a maquina Always Free de 1 GB, que aguenta de 1 a 3 numeros. Pode rodar de novo.
 
 C="${OCI_TENANCY:-}"
+# SHEEP_PREFIXO separa um teste de qualquer servidor que ja exista na conta.
+P="${SHEEP_PREFIXO:-evolution}"
+ROTULO=$(echo "$P" | tr -cd "a-z0-9" | cut -c1-12)
 if [ -z "$C" ]; then
     echo "Este comando roda no Cloud Shell da Oracle. Abra o icone >_ no topo do site da Oracle e cole de novo."
     exit 1
@@ -13,7 +16,7 @@ fi
 fala() { printf '\n\033[31m[Sheep]\033[0m %s\n' "$1"; }
 vazio() { [ -z "$1" ] || [ "$1" = "None" ] || [ "$1" = "null" ]; }
 
-JA=$(oci compute instance list -c "$C" --display-name evolution-api --lifecycle-state RUNNING --query 'data[0].id' --raw-output 2>/dev/null)
+JA=$(oci compute instance list -c "$C" --display-name "$P-api" --lifecycle-state RUNNING --query 'data[0].id' --raw-output 2>/dev/null)
 if ! vazio "$JA"; then
     IP=$(oci compute instance list-vnics --instance-id "$JA" --query 'data[0]."public-ip"' --raw-output)
     fala "Voce ja tem um servidor: http://$IP:8080/manager"
@@ -22,13 +25,13 @@ if ! vazio "$JA"; then
 fi
 
 fala "Montando a rede..."
-VCN=$(oci network vcn list -c "$C" --display-name evolution-vcn --query 'data[0].id' --raw-output 2>/dev/null)
+VCN=$(oci network vcn list -c "$C" --display-name "$P-vcn" --query 'data[0].id' --raw-output 2>/dev/null)
 if vazio "$VCN"; then
-    VCN=$(oci network vcn create -c "$C" --cidr-blocks '["10.0.0.0/16"]' --display-name evolution-vcn --dns-label evovcn --wait-for-state AVAILABLE --query data.id --raw-output)
+    VCN=$(oci network vcn create -c "$C" --cidr-blocks '["10.0.0.0/16"]' --display-name "$P-vcn" --dns-label "${ROTULO}vcn" --wait-for-state AVAILABLE --query data.id --raw-output)
 fi
 IGW=$(oci network internet-gateway list -c "$C" --vcn-id "$VCN" --query 'data[0].id' --raw-output 2>/dev/null)
 if vazio "$IGW"; then
-    IGW=$(oci network internet-gateway create -c "$C" --vcn-id "$VCN" --is-enabled true --display-name evolution-igw --wait-for-state AVAILABLE --query data.id --raw-output)
+    IGW=$(oci network internet-gateway create -c "$C" --vcn-id "$VCN" --is-enabled true --display-name "$P-igw" --wait-for-state AVAILABLE --query data.id --raw-output)
 fi
 RT=$(oci network vcn get --vcn-id "$VCN" --query 'data."default-route-table-id"' --raw-output)
 SL=$(oci network vcn get --vcn-id "$VCN" --query 'data."default-security-list-id"' --raw-output)
@@ -38,7 +41,7 @@ oci network security-list update --security-list-id "$SL" --force \
     --ingress-security-rules '[{"source":"0.0.0.0/0","protocol":"6","isStateless":false,"tcpOptions":{"destinationPortRange":{"min":22,"max":22}}},{"source":"0.0.0.0/0","protocol":"6","isStateless":false,"tcpOptions":{"destinationPortRange":{"min":8080,"max":8080}}}]' >/dev/null
 SUB=$(oci network subnet list -c "$C" --vcn-id "$VCN" --query 'data[0].id' --raw-output 2>/dev/null)
 if vazio "$SUB"; then
-    SUB=$(oci network subnet create -c "$C" --vcn-id "$VCN" --cidr-block 10.0.0.0/24 --display-name evolution-subnet --dns-label evosub --wait-for-state AVAILABLE --query data.id --raw-output)
+    SUB=$(oci network subnet create -c "$C" --vcn-id "$VCN" --cidr-block 10.0.0.0/24 --display-name "$P-subnet" --dns-label "${ROTULO}sub" --wait-for-state AVAILABLE --query data.id --raw-output)
 fi
 
 CHAVE=$(openssl rand -hex 24)
@@ -119,7 +122,7 @@ IMG=$(oci compute image list -c "$C" --operating-system "Canonical Ubuntu" --ope
 ID=""
 for AD in $(oci iam availability-domain list -c "$C" --query 'data[].name' --raw-output | tr -d '[]",'); do
     ID=$(oci compute instance launch -c "$C" --availability-domain "$AD" --shape VM.Standard.E2.1.Micro --image-id "$IMG" --subnet-id "$SUB" \
-        --assign-public-ip true --display-name evolution-api --ssh-authorized-keys-file ~/.ssh/sheep_evolution.pub --user-data-file "$INICIO" \
+        --assign-public-ip true --display-name "$P-api" --ssh-authorized-keys-file ~/.ssh/sheep_evolution.pub --user-data-file "$INICIO" \
         --wait-for-state RUNNING --query data.id --raw-output 2>~/evolution-erro.txt)
     vazio "$ID" || break
 done
