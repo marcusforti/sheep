@@ -24,12 +24,17 @@ curl -fsSL https://raw.githubusercontent.com/marcusforti/sheep/main/instalar.sh 
 
 Git, Node.js, Python, ffmpeg, Claude Code, Codex, Orca, a casa da Sheep na pasta `Sheep` e as skills de Instagram e carrossel. Leva de 5 a 15 minutos. Se a internet cair, rode a mesma linha de novo.
 
+## Enquanto instala
+
+A instalação abre a sua IA no navegador e copia o [prompt mestre](modelo/prompt-mestre.md). Cole lá, envie e guarde a resposta: ela traz o que a sua IA já sabe sobre você e o seu negócio. Depois, é só colar a resposta na Sheep.
+
 ## Depois de instalar
 
-Abra um terminal e digite `sheep`, ou clique no atalho na área de trabalho. No primeiro uso, faça o login e responda às 5 perguntas dela.
+No Windows, clique no atalho **Sheep** na área de trabalho ou digite `sheep` no terminal: abre o painel dela. No Mac, digite `sheep` no terminal.
 
-- `sheep codex`: passa a usar o Codex (assinatura do ChatGPT).
-- `sheep claude`: volta para o Claude.
+Para usar no terminal: `sheep claude` ou `sheep codex`. Quando ele perguntar se você confia na pasta, escolha **Yes** com a seta para baixo.
+
+Quer outro nome para o seu agente? Peça para ela. Boa sorte: a Sheep não vai facilitar.
 
 ## Dicionário
 

@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ffplay:*)",
+      "Bash(afplay:*)",
+      "PowerShell(ffplay:*)"
+    ]
+  }
+}

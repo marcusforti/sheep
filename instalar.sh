@@ -33,7 +33,51 @@ copia_skills() {
 
 mkdir -p "$PASTA" "$BIN"
 case "$(uname -m)" in arm64) ARQ=arm64 ;; *) ARQ=x64 ;; esac
-fala "Mudando pro seu Mac. Leva uns 5 a 15 minutos."
+abertura() {
+    MEMORIA="$(( $(sysctl -n hw.memsize 2>/dev/null || echo 0) / 1073741824 )) GB"
+    DISCO="$(df -h "$HOME" | awk 'NR==2 {print $4}')"
+    SISTEMA="macOS $(sw_vers -productVersion 2>/dev/null)"
+    V=$'\033[31m'; N=$'\033[0m'
+    printf '\n%s' "$V"
+    cat <<'LETREIRO'
+  ███████╗██╗  ██╗███████╗███████╗██████╗
+  ██╔════╝██║  ██║██╔════╝██╔════╝██╔══██╗
+  ███████╗███████║█████╗  █████╗  ██████╔╝
+  ╚════██║██╔══██║██╔══╝  ██╔══╝  ██╔═══╝
+  ███████║██║  ██║███████╗███████╗██║
+  ╚══════╝╚═╝  ╚═╝╚══════╝╚══════╝╚═╝
+LETREIRO
+    printf '%s\n' "$N"
+    printf '        .;;;;;;;;;;.          %sSHEEP%s a agente dos Incomparaveis\n' "$V" "$N"
+    printf '     .;;;;;;;;;;;;;;;;.\n'
+    printf "   _;;;;;;;;;;;;;;;;;;;;_     %sDono%s %s\n" "$V" "$N" "$USER"
+    printf '  /_);;   .--.  .--.   ;;(_\  %sComputador%s %s\n' "$V" "$N" "$(hostname -s)"
+    printf '     ;;   | %sO%s|  |%sO%s |   ;;     %sSistema%s %s\n' "$V" "$N" "$V" "$N" "$V" "$N" "$SISTEMA"
+    printf "     ;;   '--'  '--'   ;;     %sMemoria%s %s\n" "$V" "$N" "$MEMORIA"
+    printf '      ;;      __      ;;      %sDisco livre%s %s\n' "$V" "$N" "$DISCO"
+    printf "       ';.   \__/   .;'\n"
+    printf "         ';;;;;;;;;;'         %sMudando pro seu Mac.%s Leva de 5 a 15 minutos.\n" "$V" "$N"
+}
+
+abertura
+
+MOTOR=""
+printf '\nQual IA paga voce usa?  1 = Claude   2 = ChatGPT   3 = nenhuma\n'
+printf 'Digite 1, 2 ou 3 e aperte Enter: '
+read -r RESPOSTA </dev/tty
+case "$RESPOSTA" in
+    1) MOTOR=claude; ENDERECO=https://claude.ai/new ;;
+    2) MOTOR=codex; ENDERECO=https://chatgpt.com/ ;;
+esac
+if [ -n "$MOTOR" ] && curl -fsSL https://raw.githubusercontent.com/marcusforti/sheep/main/modelo/prompt-mestre.md | pbcopy; then
+    open "$ENDERECO"
+    printf '\n  \033[31mENQUANTO EU INSTALO, FAZ ISSO:\033[0m\n'
+    printf '  Abri a sua IA no navegador e ja copiei um prompt pra voce.\n'
+    printf '  1. Clique na caixa de mensagem, aperte Command+V e envie.\n'
+    printf '  2. Quando ela responder, copie a resposta inteira.\n'
+    printf '  3. Quando eu abrir, cole essa resposta pra mim.\n'
+    printf '  Sua memoria vem junto comigo. Pode ir que eu sigo instalando.\n'
+fi
 
 fala "Git..."
 if xcode-select -p >/dev/null 2>&1 && tem git; then
@@ -109,9 +153,14 @@ cd "$HOME/Sheep" || exit 1
 case "$1" in claude|codex) echo "$1" > .motor ;; esac
 [ -f .motor ] || echo claude > .motor
 MOTOR="$(cat .motor)"
+[ -f casa/dono.md ] || printf '
+Se perguntar se voce confia na pasta: aperte a SETA PARA BAIXO, escolha Yes e aperte ENTER.
+
+'
 if [ -f casa/dono.md ]; then exec "$MOTOR"; else exec "$MOTOR" "Oi Sheep, acabei de te instalar. Vamos comecar?"; fi
 FIM
     chmod +x "$BIN/sheep"
+    [ -z "$MOTOR" ] || echo "$MOTOR" > "$CASA/.motor"
     poe_path "$BIN"
     passo "Casa da Sheep" "instalado"
 else

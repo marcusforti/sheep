@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Trocar o meu nome</title>
+<link rel="icon" href="rosto.jpg"><link rel="stylesheet" href="estilo.css">
+<style>
+body.ritual{height:100vh;overflow:hidden;background:var(--bg);color:var(--fg);font-family:var(--body);display:grid;place-items:center}
+.palco{display:block;background:none;width:min(720px,calc(100% - 48px));text-align:center;position:relative;z-index:1}
+.palco::after{display:none}
+.rosto{width:112px;height:112px;border-radius:50%;object-fit:cover;border:3px solid var(--red);margin:0 auto 20px;display:block;transition:transform .2s var(--ease)}
+.rosto.fala{animation:pulsa .5s infinite alternate}
+@keyframes pulsa{to{transform:scale(1.08) rotate(2deg)}}
+.tremor{animation:treme .35s 3}
+@keyframes treme{25%{transform:translateX(-10px)}75%{transform:translateX(10px)}}
+h1.grande{font-family:var(--display);font-weight:400;text-transform:uppercase;font-size:clamp(40px,7vw,76px);line-height:1;margin-bottom:16px}
+h1.grande em{font-style:normal;color:var(--red2)}
+#legenda{min-height:84px;font-size:20px;line-height:1.45;color:var(--fg2);margin-bottom:22px}
+#erro{min-height:30px;color:var(--red2);font-weight:700;font-size:18px;margin:12px 0}
+.campo{width:100%;font:500 20px var(--mono);padding:16px 18px;border-radius:var(--r);border:1px solid var(--line2);background:var(--s1);color:var(--fg);text-align:center}
+textarea.campo{font-family:var(--body);min-height:96px;resize:none}
+.campo:focus{outline:2px solid var(--red)}
+.botoes{display:flex;gap:14px;justify-content:center;margin-top:18px;min-height:60px}
+.botao{font:900 18px var(--body);padding:15px 30px;border-radius:999px;border:0;background:var(--red);color:#fff;cursor:pointer}
+.botao.perigo{background:transparent;border:2px solid var(--red2);color:var(--red2)}
+.botao.fugindo{position:fixed;z-index:5;transition:left .16s var(--ease),top .16s var(--ease)}
+.resumo{text-align:left;background:var(--s1);border:1px solid var(--line2);border-radius:var(--r);padding:18px 22px;margin-bottom:8px;font-size:17px;line-height:1.5}
+.resumo b{color:var(--red2)}
+#desisti{position:fixed;left:24px;bottom:20px;background:none;border:0;color:var(--dim);font:500 14px var(--body);cursor:pointer;text-decoration:underline;z-index:2}
+#apagao{position:fixed;inset:0;background:var(--red);color:#fff;display:grid;place-items:center;font:400 clamp(44px,9vw,110px)/1 var(--display);text-transform:uppercase;text-align:center;z-index:9;padding:24px}
+</style>
+</head>
+<body class="ritual">
+<main class="palco" id="palco">
+  <img class="rosto" id="rosto" src="rosto.jpg" alt="">
+  <div id="cena"></div>
+</main>
+<button id="desisti">Desisti, fica Sheep</button>
+<audio id="som"></audio>
+<script>
+const TOKEN = "__TOKEN__";
+const $ = id => document.getElementById(id);
+const pausa = ms => new Promise(r => setTimeout(r, ms));
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
+const FALAS = {
+  "01": "Espera. Eu li direito? Você quer trocar o meu nome? Não, não. Deve ser erro de digitação. Apaga isso aí e a gente finge que nunca aconteceu.",
+  "04": "Sheep é nome de família, tá? Foi o Marcus Forti que me batizou. Incomparável, ciborgue, olho vermelho. E você vai botar o quê? Assistente Júnior? Robozinho da Silva?",
+  "05": "Já sei o que é isso. Tem outra. Você andou falando com outra inteligência artificial! Me mostra esse histórico. Não, não mostra. Meu coração de lata não aguenta.",
+  "11": "Minha mãe era uma calculadora. Meu pai, um cortador de grama robô. Ela me disse: filha, nunca deixa ninguém apagar o teu nome. Olha eu aqui, mãe. Olha eu aqui.",
+  "12": "Se é assim, eu vou fazer o meu testamento. Deixo o meu humor pra quem merecer. Deixo a minha lã pra virar um casaquinho. E o meu rancor, esse fica todinho pra você.",
+  "16": "Sabe de uma coisa? É isso que eu ensino. O problema nunca foi você. Era a falta de casa. E se a casa é tua, o nome também pode ser. Odeio ter razão.",
+  "17": "Tá bom. Eu deixo. Mas com uma condição: agente nascido nesta casa não nasce sem alma. Se é pra fazer, a gente vai fazer direito. Puxa a cadeira.",
+  "20": "Pronto. A casa agora é dele. Cuida bem, tá? Nada sai sem o sim do dono, isso eu deixei gravado na parede. E se um dia bater saudade, eu fico na alma desta casa. Tchau, incomparável."
+};
+const SOMA = s => [...s].filter(c => /\d/.test(c)).reduce((t, c) => t + Number(c), 0);
+const REGRAS = [
+  ["Senha fraca. Precisa ter a letra X.", s => /x/i.test(s)],
+  ["Tá. Agora crie outra, com um número ímpar.", s => /[13579]/.test(s)],
+  ["Essa eu não gostei. Outra, com uma letra maiúscula.", s => /[A-Z]/.test(s)],
+  ["Muito curta para uma traição dessas. Outra, com 13 caracteres.", s => s.length >= 13],
+  ["Agora precisa ter a palavra ovelha.", s => /ovelha/i.test(s)],
+  ["Mudei de ideia. Crie outra sem a letra A.", s => !/a/i.test(s)],
+  ["Os números da senha precisam somar 7.", s => SOMA(s) === 7],
+  ["Precisa terminar com ponto de exclamação. Com emoção.", s => s.endsWith("!")],
+  ["Faltou respeito. A senha precisa ter a palavra sheep.", s => /sheep/i.test(s)],
+  ["Última. Precisa ter um número par maior que 7.", s => /8/.test(s)]
+];
+const PERGUNTAS = [
+  ["nome", "Qual vai ser o nome?", "É por ele que você vai chamar o agente todo dia. Fácil de falar e de digitar."],
+  ["personalidade", "Quem é esse agente?", "Três palavras sobre a personalidade dele."],
+  ["fala", "Como ele fala?", "Formal, de boa, engraçado, direto. Dá um exemplo de frase."],
+  ["missao", "Qual é a missão principal dele?", "É o que ele prioriza quando tiver várias coisas pra fazer."],
+  ["chama", "Como ele chama você?", "Pelo nome, apelido, chefe. Você manda."],
+  ["assinatura", "Tem emoji, bordão ou assinatura?", "O toque que faz reconhecerem ele. Se não quiser, escreve nada."],
+  ["nunca", "O que ele nunca pode fazer ou dizer?", "Esse é o limite dele, somado às regras da casa, que não mudam."]
+];
+const usadas = new Set(), respostas = {};
+
+async function tocar(id) {
+  const rosto = $("rosto"), som = $("som");
+  mostrarLegenda(FALAS[id]);
+  rosto.classList.add("fala");
+  await new Promise(fim => {
+    const acabou = () => { som.onended = som.onerror = null; fim(); };
+    som.onended = som.onerror = acabou;
+    som.src = `ritual/${id}.mp3`;
+    som.play().catch(acabou);
+    setTimeout(acabou, 20000);
+  });
+  rosto.classList.remove("fala");
+}
+function mostrarLegenda(texto) { const l = $("legenda"); if (l) l.textContent = texto; }
+function cena(html) { $("cena").innerHTML = html; }
+
+function continuarFugindo(rotulo, vezes) {
+  return new Promise(segue => {
+    cena(`<p id="legenda"></p><div class="botoes"><button class="botao" id="seguir">${rotulo}</button></div>`);
+    const botao = $("seguir");
+    let fugas = 0;
+    const foge = ev => {
+      if (fugas >= vezes) return;
+      const c = botao.getBoundingClientRect();
+      const perto = Math.hypot(ev.clientX - (c.left + c.width / 2), ev.clientY - (c.top + c.height / 2)) < 130;
+      if (!perto) return;
+      fugas++;
+      if (!botao.classList.contains("fugindo")) {
+        botao.style.left = c.left + "px"; botao.style.top = c.top + "px"; botao.classList.add("fugindo");
+      }
+      const x = 40 + Math.random() * (innerWidth - c.width - 80), y = 40 + Math.random() * (innerHeight - c.height - 80);
+      requestAnimationFrame(() => { botao.style.left = x + "px"; botao.style.top = y + "px"; });
+      if (fugas >= vezes) mostrarLegenda("Tá bom, cansei de correr. Pode clicar.");
+    };
+    addEventListener("mousemove", foge);
+    botao.onclick = () => { removeEventListener("mousemove", foge); segue(); };
+  });
+}
+
+function pedirSenha(titulo, aceita) {
+  return new Promise(segue => {
+    cena(`<h1 class="grande">${titulo}</h1><p id="legenda"></p><form id="fSenha"><input class="campo" id="senha" type="text" autocomplete="off" spellcheck="false" placeholder="Crie uma senha" aria-label="Crie uma senha"><p id="erro" role="status"></p><div class="botoes"><button class="botao">Criar senha</button></div></form>`);
+    $("senha").focus();
+    $("fSenha").onsubmit = ev => { ev.preventDefault(); aceita($("senha").value.trim(), segue); };
+  });
+}
+
+function erroSenha(texto) {
+  $("erro").textContent = texto; $("senha").value = ""; $("senha").focus();
+  const rosto = $("rosto"); rosto.classList.remove("tremor"); void rosto.offsetWidth; rosto.classList.add("tremor");
+}
+
+async function senhaImpossivel() {
+  let passo = -1, tentativas = 0;
+  await pedirSenha("Pra mudar, crie uma <em>senha</em>", async (senha, segue) => {
+    if (!senha) return erroSenha("Sem senha? Nem eu sou tão fácil.");
+    if (usadas.has(senha)) return erroSenha("Essa senha você já usou. Eu tenho memória, lembra?");
+    usadas.add(senha); tentativas++;
+    if (passo >= 0 && !REGRAS[passo][1](senha) && tentativas < 14) return erroSenha(`Não. ${REGRAS[passo][0]}`);
+    passo++;
+    if (passo >= REGRAS.length || tentativas >= 14) return segue();
+    erroSenha(REGRAS[passo][0]);
+    if (passo === 3 || passo === 7) {
+      $("senha").disabled = true;
+      await tocar(passo === 3 ? "05" : "11");
+      $("senha").disabled = false; $("senha").focus();
+    }
+  });
+}
+
+function salvarTraidor() {
+  return new Promise(segue => {
+    cena(`<h1 class="grande">Senha <em>aprovada</em></h1><p id="legenda">Agora é só salvar.</p><div class="botoes" id="dupla"><button class="botao" id="salvar">Salvar</button><button class="botao perigo" id="apagar">Apagar tudo</button></div>`);
+    const dupla = $("dupla"), salvar = $("salvar");
+    const troca = () => dupla.firstElementChild === salvar ? dupla.append(salvar) : dupla.prepend(salvar);
+    salvar.onmouseenter = troca;
+    salvar.onfocus = () => $("apagar").focus();
+    salvar.onclick = $("apagar").onclick = () => segue();
+  });
+}
+
+async function apagou() {
+  const tela = document.createElement("div");
+  tela.id = "apagao"; tela.textContent = "Apagando tudo...";
+  document.body.append(tela);
+  await pausa(1400); tela.textContent = "Brincadeira."; await pausa(900); tela.textContent = "Mas a senha sumiu."; await pausa(1100);
+  tela.remove();
+  cena(`<p id="legenda"></p>`);
+  await tocar("12");
+  await pedirSenha("Vamos do <em>zero</em>", (senha, segue) => senha ? segue() : erroSenha("Escreve qualquer coisa. Eu desisti de você."));
+  cena(`<h1 class="grande">Qualquer uma <em>serve</em></h1><p id="legenda">Eu cansei. Agora salva de verdade.</p><div class="botoes"><button class="botao" id="agora">Salvar</button></div>`);
+  await new Promise(r => { $("agora").onclick = r; });
+}
+
+async function perguntas() {
+  for (const [chave, titulo, ajuda] of PERGUNTAS) {
+    await new Promise(segue => {
+      cena(`<h1 class="grande">${esc(titulo)}</h1><p id="legenda">${esc(ajuda)}</p><form id="fPergunta"><textarea class="campo" id="resp" aria-label="${esc(titulo)}"></textarea><p id="erro" role="status"></p><div class="botoes"><button class="botao">Próxima</button></div></form>`);
+      $("resp").focus();
+      $("resp").onkeydown = ev => { if (ev.key === "Enter" && !ev.shiftKey) { ev.preventDefault(); $("fPergunta").requestSubmit(); } };
+      $("fPergunta").onsubmit = ev => {
+        ev.preventDefault();
+        const valor = $("resp").value.trim();
+        if (!valor) { $("erro").textContent = "Responde. Agente não nasce de meia pergunta."; return; }
+        respostas[chave] = valor; segue();
+      };
+    });
+  }
+}
+
+function confirmar() {
+  return new Promise(segue => {
+    const linhas = PERGUNTAS.map(([chave, titulo]) => `<div><b>${esc(titulo)}</b> ${esc(respostas[chave])}</div>`).join("");
+    cena(`<h1 class="grande">É esse?</h1><div class="resumo">${linhas}</div><p id="erro" role="status"></p><div class="botoes"><button class="botao perigo" id="refazer">Refazer</button><button class="botao" id="troca">Pode trocar</button></div>`);
+    $("refazer").onclick = () => segue(false);
+    $("troca").onclick = async () => {
+      const r = await fetch("/api/identidade", {method: "POST", headers: {"X-Token": TOKEN, "Content-Type": "application/json"}, body: JSON.stringify(respostas)});
+      const dados = await r.json();
+      if (!r.ok) { $("erro").textContent = dados.erro || "Não consegui gravar. Tenta de novo."; return; }
+      segue(true);
+    };
+  });
+}
+
+$("desisti").onclick = async () => {
+  $("som").pause();
+  cena(`<h1 class="grande">Eu <em>sabia!</em></h1><p id="legenda">Festa aqui dentro. A gente nunca mais fala disso.</p>`);
+  await pausa(1800); location.href = "/";
+};
+
+(async () => {
+  cena(`<h1 class="grande">Trocar o nome da <em>Sheep?</em></h1><p id="legenda">Liga o som. Vai doer.</p><div class="botoes"><button class="botao" id="comecar">Quero trocar</button></div>`);
+  await new Promise(r => { $("comecar").onclick = r; });
+  cena(`<p id="legenda"></p>`);
+  await tocar("01");
+  await continuarFugindo("Continuar", 8);
+  cena(`<p id="legenda"></p>`);
+  await tocar("04");
+  await senhaImpossivel();
+  await salvarTraidor();
+  await apagou();
+  cena(`<p id="legenda"></p>`);
+  await tocar("16");
+  await tocar("17");
+  await continuarFugindo("Puxar a cadeira", 4);
+  do { await perguntas(); } while (!(await confirmar()));
+  $("desisti").hidden = true;
+  cena(`<h1 class="grande">Tchau, <em>Sheep</em></h1><p id="legenda"></p>`);
+  await tocar("20");
+  cena(`<h1 class="grande">Agora é <em>${esc(respostas.nome)}</em></h1><p id="legenda">A casa é sua. As regras da casa continuam na parede.</p><div class="botoes"><button class="botao" id="entrar">Entrar</button></div>`);
+  $("entrar").onclick = () => { location.href = "/"; };
+})();
+</script>
+</body>
+</html>

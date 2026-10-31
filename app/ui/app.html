@@ -1,0 +1,52 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sheep</title>
+<link rel="icon" href="rosto.jpg"><link rel="stylesheet" href="estilo.css"></head><body class="app">
+<aside>
+  <div class="marca"><img src="rosto.jpg" alt=""><div><b id="marcaNome">SHEEP</b><small id="donoNome" hidden></small></div><button id="som" aria-label="Ligar som" aria-pressed="false">🔇</button></div>
+  <div class="nova-area"><button class="nova" id="novaSess" aria-expanded="false" aria-controls="novaConversa"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span>Nova conversa</span><kbd>Ctrl N</kbd></button>
+    <form class="pop" id="novaConversa" hidden><label for="ondeConversa">Onde?</label><select id="ondeConversa"><option value="">Geral</option></select><label for="motorNova">Motor</label><select id="motorNova"></select><label for="nomeConversa">Título (opcional)</label><input id="nomeConversa" maxlength="120" autocomplete="off"><div class="acoes-pacote"><button>Criar</button><button class="sec" type="button" id="cancelarNova">Cancelar</button></div></form>
+  </div>
+  <label class="busca" for="buscaConversas"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="buscaConversas" type="search" placeholder="Buscar conversas" aria-label="Buscar conversas" autocomplete="off"></label>
+  <nav class="lista sess" aria-label="Conversas"><div id="listaSess"></div><button class="sec" id="verArquivadas" aria-pressed="false">Ver arquivadas</button></nav>
+  <div class="rodape"><button class="zap" id="whatsappChip"><i></i><span id="whatsappResumo">WhatsApp não configurado</span></button>
+    <nav class="icones" aria-label="Telas">
+      <button class="ic on" data-t="conversa" data-dica="Conversa" aria-label="Conversa"><svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg></button>
+      <button class="ic" data-t="projetos" data-dica="Projetos" aria-label="Projetos"><svg viewBox="0 0 24 24"><path d="M3 7V5h6l2 2h10v13H3z"/></svg></button>
+      <button class="ic" data-t="pacotes" data-dica="Pacotes e habilidades" aria-label="Pacotes e habilidades"><svg viewBox="0 0 24 24"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9zM12 12 4 7.5M12 12l8-4.5M12 12v9"/></svg></button>
+      <button class="ic" data-t="aprovacoes" data-dica="Seu sim" aria-label="Seu sim"><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg><span class="n" id="nAprov" hidden></span></button>
+      <button class="ic" data-t="conexoes" data-dica="Conexões" aria-label="Conexões"><svg viewBox="0 0 24 24"><path d="M9 7H7a5 5 0 0 0 0 10h2M15 7h2a5 5 0 0 1 0 10h-2M8 12h8"/></svg></button>
+      <button class="ic" data-t="status" data-dica="Aprendi / Status" aria-label="Aprendi / Status"><svg viewBox="0 0 24 24"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/><circle cx="12" cy="12" r="3"/></svg></button>
+      <a class="ic" href="ritual.html" data-dica="Trocar o meu nome" aria-label="Trocar o meu nome" style="display:grid;place-items:center"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4"/></svg></a>
+    </nav>
+  </div>
+</aside>
+<main>
+  <section class="tela on" id="conversa">
+    <header id="topoConversa">
+      <div class="titulo" id="tituloSessao" contenteditable="false" role="textbox" aria-label="Título da conversa" spellcheck="false" tabindex="0">Nova conversa</div>
+      <button class="pilula" id="motorBtn" aria-expanded="false" aria-controls="motorPop" title="Trocar motor"><i class="dot"></i><span id="motorNome">Escolher motor</span></button>
+      <div class="pop motor-pop" id="motorPop" hidden><label for="motor">Motor desta conversa</label><select id="motor" aria-label="Motor desta conversa"></select><p id="projAtivo">Geral</p></div>
+      <span class="espaco"></span>
+      <button class="mem" id="memBtn" aria-expanded="false" aria-controls="memPop"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg><span id="contextoResumo">Memória —</span></button>
+      <button class="mais" id="maisBtn" aria-expanded="false" aria-controls="menuConversa" aria-label="Mais opções" disabled><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/></svg></button>
+      <div class="linha-mem" id="barraContexto" role="progressbar" aria-label="Memória da conversa usada. Abrir detalhes" tabindex="0" aria-controls="memPop" aria-expanded="false" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" data-faixa="verde"><i></i></div>
+      <div class="pop" id="memPop" hidden><h4>Memória desta conversa</h4><div id="detalheContexto"></div></div>
+      <div class="menu" id="menuConversa" hidden>
+        <button id="resumir" disabled>Resumir conversa</button><button id="fecharSessao" disabled>Fechar sessão</button><button id="moverSessao" disabled>Mover para projeto…</button><hr><button class="perigo" id="arquivarSessao" disabled>Arquivar</button>
+        <div id="confirmacaoArquivar" hidden><p>Arquivar esta conversa?</p><div class="acoes-pacote"><button id="confirmarArquivar">Confirmar arquivamento</button><button id="cancelarArquivar" class="sec">Cancelar</button></div></div>
+        <form id="moverConversa" hidden><label for="projetoDestino">Mover para</label><select id="projetoDestino"></select><button>Mover conversa</button></form>
+      </div>
+    </header>
+    <div class="rolo" id="rolo"><div class="fio"><div class="msgs" id="msgs"></div><div id="filaPedidos" aria-live="polite" hidden></div></div></div>
+    <button class="sec novas-mensagens" id="novasMensagens" hidden>↓ novas mensagens</button>
+    <div class="base"><p id="avisoConversa" role="status" aria-live="polite"></p>
+      <form class="caixa" id="form"><textarea id="texto" rows="1" placeholder="Pede pra mim, chefe…" aria-label="Seu pedido" autocomplete="off"></textarea><button class="anexo" id="anexar" type="button" title="Anexar arquivo" aria-label="Anexar arquivo"><svg viewBox="0 0 24 24"><path d="m21 11-8.5 8.5a5 5 0 0 1-7-7L14 4a3.5 3.5 0 0 1 5 5l-8.5 8.5a2 2 0 0 1-3-3L15 7"/></svg></button><input type="file" id="arquivoAnexo" hidden><button class="enviar" id="enviar" aria-label="Enviar"><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button><button class="enviar parar" id="parar" type="button" aria-label="Parar" title="Parar" hidden><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2"/></svg></button></form>
+      <div class="dica"><span id="dicaEnvio">Enter envia · Shift+Enter quebra linha · Esc para</span><span id="tokensTotal">esta conversa: 0 tokens</span></div>
+    </div>
+  </section>
+  <section class="tela" id="projetos"><div class="pagina"><h2>Projetos<em>.</em></h2><p class="sub">Uma casa para cada ideia. Vamos trabalhar em qual?</p><div class="cards" id="cardsProj"></div></div></section>
+  <section class="tela" id="pacotes"><div class="pagina"><h2>Pacotes<em>.</em></h2><p class="sub">Habilidades prontas que eu instalo em 1 clique.</p><p id="avisoPacote" role="status" aria-live="polite"></p><div class="cards"><div class="pacotes-lista" id="cardsPacotes"></div><div class="card pacotes-extra"><span class="tag">○ de fora</span><h3>+ Pacote de fora</h3><p>Recebeu um .zip de alguém de confiança? Instala aqui.</p><button id="pacoteFora">Escolher arquivo</button><input type="file" id="arquivoPacote" accept=".zip" hidden></div><div id="previaPacote" class="pacotes-lista"></div></div><section id="habilidades" class="secao"><h3>Habilidades</h3><p class="sub">Escolha o que fica ligado na sua Sheep.</p><p id="avisoHab" role="status" aria-live="polite"></p><div class="cards" id="cardsHab"></div></section></div></section>
+  <section class="tela" id="aprovacoes"><div class="pagina"><h2>Seu sim<em>.</em></h2><p class="sub">Nada sai daqui sem você.</p><div class="cards" id="cardsAprov"></div></div></section>
+  <section class="tela" id="conexoes"><div class="pagina"><h2>Conexões<em>.</em></h2><p class="sub">WhatsApp, motores e chaves.</p><div class="cards whatsapp-area" id="whatsappCon"></div><div class="cards" id="cardsCon"></div></div></section>
+  <section class="tela" id="status"><div class="pagina"><h2>Aprendi<em>.</em></h2><p class="sub">O que eu guardei sobre você e como está a nossa casa.</p><p id="avisoStatus" role="status" aria-live="polite"></p><div class="cards" id="cardsStatus"></div></div></section>
+</main>
+<script src="vendor/marked.min.js"></script><script src="vendor/purify.min.js"></script><script src="app.js"></script></body></html>

@@ -29,6 +29,7 @@
         sheep     = 'https://github.com/marcusforti/sheep/archive/refs/heads/main.zip'
         instagram = 'https://github.com/Jakeschincariol/instagram-agent-skill/archive/refs/heads/main.zip'
         carrossel = 'https://github.com/marcusforti/carrossel-tweet/archive/refs/heads/main.zip'
+        prompt    = 'https://raw.githubusercontent.com/marcusforti/sheep/main/modelo/prompt-mestre.md'
     }
 
     function Fala($texto) { Write-Host "`n[Sheep] $texto" -ForegroundColor Red }
@@ -122,19 +123,95 @@
         }
     }
 
+    # Abertura no estilo neofetch: a ovelha de olhos vermelhos e os dados do computador.
+    function Abertura($livre) {
+        $arte = @(
+            '        .;;;;;;;;;;.        ',
+            '     .;;;;;;;;;;;;;;;;.     ',
+            '   _;;;;;;;;;;;;;;;;;;;;_   ',
+            '  /_);;   .--.  .--.   ;;(_\',
+            '     ;;   | O|  |O |   ;;   ',
+            '     ;;   ''--''  ''--''   ;;   ',
+            '      ;;      __      ;;    ',
+            '       '';.   \__/   .;''     ',
+            '         '';;;;;;;;;;''       '
+        )
+        try {
+            $sistema = (Get-CimInstance Win32_OperatingSystem).Caption -replace 'Microsoft ', ''
+            $memoria = "$([math]::Round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory / 1GB)) GB"
+        } catch { $sistema = 'Windows'; $memoria = '?' }
+        $dados = @(
+            @('SHEEP', 'a agente dos Incomparaveis'),
+            @('', ''),
+            @('Dono', $env:USERNAME),
+            @('Computador', $env:COMPUTERNAME),
+            @('Sistema', $sistema),
+            @('Memoria', $memoria),
+            @('Disco livre', "$([math]::Round($livre / 1GB)) GB"),
+            @('', ''),
+            @('Mudando pro seu computador.', 'Leva de 5 a 15 minutos.')
+        )
+        # Letreiro em blocos, montado aqui para o arquivo continuar em ASCII.
+        $letreiro = @(
+            '#######\##\  ##\#######\#######\######\ ',
+            '##/====J##|  ##|##/====J##/====J##/==##\',
+            '#######\#######|#####\  #####\  ######/J',
+            'L====##|##/==##|##/==J  ##/==J  ##/===J ',
+            '#######|##|  ##|#######\#######\##|     ',
+            'L======JL=J  L=JL======JL======JL=J     '
+        )
+        $blocos = @{ '#' = 0x2588; '=' = 0x2550; '|' = 0x2551; '/' = 0x2554; '\' = 0x2557; 'L' = 0x255A; 'J' = 0x255D }
+        Write-Host ''
+        foreach ($linha in $letreiro) {
+            $texto = -join ($linha.ToCharArray() | ForEach-Object { if ($blocos.ContainsKey("$_")) { [char]$blocos["$_"] } else { $_ } })
+            Write-Host "  $texto" -ForegroundColor Red
+        }
+        Write-Host ''
+        for ($i = 0; $i -lt $arte.Count; $i++) {
+            foreach ($pedaco in ($arte[$i] -split '(O)')) {
+                if ($pedaco -ceq 'O') { Write-Host $pedaco -NoNewline -ForegroundColor Red }
+                else { Write-Host $pedaco -NoNewline }
+            }
+            Write-Host "  $($dados[$i][0]) " -NoNewline -ForegroundColor Red
+            Write-Host $dados[$i][1]
+        }
+    }
+
     if (Test-Path $tmp) { Remove-Item -Recurse -Force $tmp }
     New-Item -ItemType Directory -Force $tmp, $programas, $binarios | Out-Null
     RecarregaPath
-    Write-Host ''
-    Write-Host '  ===============================================' -ForegroundColor Red
-    Write-Host '   SHEEP   mudando pro seu computador'              -ForegroundColor Red
-    Write-Host '   Leva uns 5 a 15 minutos. Pode deixar rodando.'
-    Write-Host '  ===============================================' -ForegroundColor Red
-
     $livre = (Get-PSDrive -Name ($env:LOCALAPPDATA.Substring(0, 1))).Free
+    Abertura $livre
+
     if ($livre -lt 4GB) {
         Write-Host "`nFaltou espaco: precisa de 4 GB livres e tem $([math]::Round($livre / 1GB, 1)) GB." -ForegroundColor Yellow
         return
+    }
+
+    # Enquanto instala, a pessoa puxa a propria memoria do Claude ou do ChatGPT.
+    $motor = ''
+    if (-not $teste) {
+        Write-Host "`nQual IA paga voce usa?  1 = Claude   2 = ChatGPT   3 = nenhuma"
+        $resposta = Read-Host 'Digite 1, 2 ou 3 e aperte Enter'
+        if ($resposta -eq '1') { $motor = 'claude'; $endereco = 'https://claude.ai/new' }
+        if ($resposta -eq '2') { $motor = 'codex'; $endereco = 'https://chatgpt.com/' }
+        if ($motor) {
+            try {
+                $arquivo = Join-Path $tmp 'prompt-mestre.md'
+                Baixa $urls.prompt $arquivo
+                Get-Content -LiteralPath $arquivo -Raw -Encoding UTF8 | Set-Clipboard
+                Start-Process $endereco
+                Write-Host ''
+                Write-Host '  ENQUANTO EU INSTALO, FAZ ISSO:' -ForegroundColor Red
+                Write-Host '  Abri a sua IA no navegador e ja copiei um prompt pra voce.'
+                Write-Host '  1. Clique na caixa de mensagem, aperte Ctrl+V e envie.'
+                Write-Host '  2. Quando ela responder, copie a resposta inteira.'
+                Write-Host '  3. Quando eu abrir, cole essa resposta pra mim.'
+                Write-Host '  Sua memoria vem junto comigo. Pode ir que eu sigo instalando.'
+            } catch {
+                Write-Host '  Nao consegui abrir o prompt agora. Eu te mostro de novo quando abrir.' -ForegroundColor Yellow
+            }
+        }
     }
 
     Etapa 'Git' { Tem 'git' } {
@@ -223,16 +300,28 @@
             New-Item -ItemType Directory -Force (Split-Path $destino) | Out-Null
             Copy-Item -LiteralPath $item.FullName -Destination $destino -Force
         }
+        $appOrigem = Join-Path $tmp 'repo-sheep\sheep-main\app'
+        $appDestino = Join-Path $programas 'Sheep'
+        if (Test-Path $appDestino) { Remove-Item -Recurse -Force $appDestino }
+        Copy-Item -Recurse -Force $appOrigem $appDestino
         $bat = @'
 @echo off
 cd /d "%USERPROFILE%\Sheep"
 if /i "%~1"=="claude" (>.motor echo claude)
 if /i "%~1"=="codex" (>.motor echo codex)
+if "%~1"=="" (
+  start "" pythonw "%LOCALAPPDATA%\Programs\Sheep\painel.py"
+  exit /b
+)
 if not exist .motor (>.motor echo claude)
 set /p MOTOR=<.motor
+if not exist casa\dono.md echo.
+if not exist casa\dono.md echo Se perguntar se voce confia na pasta: aperte a SETA PARA BAIXO, escolha Yes e aperte ENTER.
+if not exist casa\dono.md echo.
 if exist casa\dono.md (call %MOTOR%) else (call %MOTOR% "Oi Sheep, acabei de te instalar. Vamos comecar?")
 '@
         Set-Content -LiteralPath $inicio -Value $bat -Encoding Ascii
+        if ($motor) { Set-Content -LiteralPath (Join-Path $casa '.motor') -Value $motor -Encoding Ascii }
         PoePath $binarios
         $feito.casa = $true
     }
@@ -254,8 +343,8 @@ if exist casa\dono.md (call %MOTOR%) else (call %MOTOR% "Oi Sheep, acabei de te 
 
     if ((Test-Path $inicio) -and -not $teste) {
         $atalho = (New-Object -ComObject WScript.Shell).CreateShortcut((Join-Path ([Environment]::GetFolderPath('Desktop')) 'Sheep.lnk'))
-        $atalho.TargetPath = Join-Path $env:WINDIR 'System32\cmd.exe'
-        $atalho.Arguments = "/k `"$inicio`""
+        $atalho.TargetPath = $inicio
+        $atalho.WindowStyle = 7
         $atalho.WorkingDirectory = $casa
         $atalho.IconLocation = Join-Path $casa 'sheep.ico'
         $atalho.Save()
@@ -271,11 +360,7 @@ if exist casa\dono.md (call %MOTOR%) else (call %MOTOR% "Oi Sheep, acabei de te 
         Write-Host "Registro: $log"
     }
     if ((Test-Path $inicio) -and -not $teste) {
-        Write-Host "`nQual assinatura voce tem?  1 = Claude   2 = ChatGPT (Codex)"
-        if ((Read-Host 'Digite 1 ou 2 e aperte Enter') -eq '2') {
-            Set-Content -LiteralPath (Join-Path $casa '.motor') -Value 'codex' -Encoding Ascii
-        }
-        Fala 'Abrindo a Sheep numa janela nova. Daqui pra frente e so digitar sheep.'
-        Start-Process -FilePath (Join-Path $env:WINDIR 'System32\cmd.exe') -ArgumentList '/k', "`"$inicio`""
+        Fala 'Abrindo o meu painel. Daqui pra frente e so clicar no atalho Sheep na area de trabalho.'
+        Start-Process -FilePath $inicio -WindowStyle Minimized
     }
 }
