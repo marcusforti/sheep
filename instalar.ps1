@@ -245,7 +245,10 @@ if exist casa\dono.md (call %MOTOR%) else (call %MOTOR% "Oi Sheep, acabei de te 
             Extrai $arquivo $pasta
         }
         CopiaSkills (Join-Path $tmp 'repo-instagram\instagram-agent-skill-main\skills')
-        CopiaSkills (Join-Path $tmp 'repo-carrossel')
+        $carrossel = Join-Path $tmp 'skills-carrossel'
+        New-Item -ItemType Directory -Force $carrossel | Out-Null
+        Move-Item (Join-Path $tmp 'repo-carrossel\carrossel-tweet-main') (Join-Path $carrossel 'carrossel-tweet')
+        CopiaSkills $carrossel
         $feito.skills = $true
     }
 

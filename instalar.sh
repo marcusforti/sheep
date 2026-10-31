@@ -121,7 +121,9 @@ fi
 fala "Skills..."
 if baixa_repo Jakeschincariol/instagram-agent-skill && baixa_repo marcusforti/carrossel-tweet; then
     copia_skills "$TMP/instagram-agent-skill-main/skills"
-    copia_skills "$TMP"
+    mkdir -p "$TMP/skills-carrossel"
+    mv "$TMP/carrossel-tweet-main" "$TMP/skills-carrossel/carrossel-tweet"
+    copia_skills "$TMP/skills-carrossel"
     passo Skills "instalado"
 else
     passo Skills "FALHOU"
